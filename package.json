@@ -1,0 +1,46 @@
+{
+	"name": "status-line",
+	"version": "0.1.0",
+	"private": false,
+	"type": "module",
+	"description": "A custom status-line and provider quota extension for pi.",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"status-line",
+		"usage-quota"
+	],
+	"engines": {
+		"node": ">=23.6"
+	},
+	"scripts": {
+		"format": "biome format --write .",
+		"lint": "biome check . && eslint .",
+		"test": "node --test \"extensions/**/*.test.mjs\"",
+		"typecheck": "tsc --noEmit"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": ">=0.80.10",
+		"@earendil-works/pi-tui": "*"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.1",
+		"@earendil-works/pi-coding-agent": "0.80.10",
+		"@earendil-works/pi-tui": "0.80.10",
+		"@eslint/js": "^10.0.1",
+		"eslint": "^10.5.0",
+		"typescript": "6.0.3",
+		"typescript-eslint": "^8.62.0"
+	},
+	"pnpm": {
+		"ignoredBuiltDependencies": [
+			"@google/genai",
+			"protobufjs"
+		]
+	}
+}
