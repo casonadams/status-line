@@ -67,6 +67,36 @@ test("cache: first call hits the network, second call within TTL returns cached 
 	}
 });
 
+test("cache: concurrent calls share one in-flight provider request", async () => {
+	let calls = 0;
+	let resolveFetch;
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = () => {
+		calls++;
+		return new Promise((resolve) => {
+			resolveFetch = resolve;
+		});
+	};
+	try {
+		const auth = makeAuth({ tokenProvider: "anthropic" });
+		const cache = makeCache();
+		const first = fetchProviderQuotas(auth, "anthropic", cache);
+		const second = fetchProviderQuotas(auth, "anthropic", cache);
+		await Promise.resolve();
+		assert.equal(calls, 1);
+		resolveFetch({
+			ok: true,
+			status: 200,
+			json: async () => ({}),
+			text: async () => "",
+		});
+		assert.equal((await first).success, true);
+		assert.equal((await second).success, true);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
 test("cache: missing token still caches the failure", async () => {
 	let calls = 0;
 	const originalFetch = globalThis.fetch;
@@ -210,6 +240,30 @@ test("github-copilot: hits copilot_internal/user with plugin headers", async () 
 		assert.equal(captured.init.headers["Copilot-Integration-Id"], "vscode-chat");
 	} finally {
 		globalThis.fetch = originalFetch;
+	}
+});
+
+test("github-copilot: preserves request errors after credential fallbacks fail", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalPath = process.env.PATH;
+	process.env.PATH = "";
+	globalThis.fetch = async () =>
+		/** @type {Response} */ ({
+			ok: false,
+			status: 401,
+			statusText: "Unauthorized",
+			json: async () => ({}),
+			text: async () => "Unauthorized",
+		});
+	try {
+		const auth = makeAuth({ "github-copilot": { type: "oauth", refresh: "bad-token" } });
+		const result = await fetchGitHubCopilotQuotas(auth);
+		assert.equal(result.success, false);
+		assert.equal(result.error.kind, "http");
+		assert.equal(result.error.message, "Unauthorized");
+	} finally {
+		globalThis.fetch = originalFetch;
+		process.env.PATH = originalPath;
 	}
 });
 

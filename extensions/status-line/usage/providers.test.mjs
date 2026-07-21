@@ -58,11 +58,21 @@ test("parseGitHubCopilotUsage: maps each snapshot key", () => {
 	assert.ok(labels.includes("Chat / month"));
 });
 
-test("parseGitHubCopilotUsage: skips unlimited and zero-entitlement snapshots", () => {
+test("parseGitHubCopilotUsage: preserves an all-unlimited quota state", () => {
 	const windows = parseGitHubCopilotUsage({
 		quota_snapshots: {
 			chat: { unlimited: true },
-			completions: { entitlement: 0, remaining: 0 },
+			completions: { unlimited: true },
+		},
+	});
+	assert.equal(windows.length, 1);
+	assert.equal(windows[0].unlimited, true);
+});
+
+test("parseGitHubCopilotUsage: skips zero-entitlement snapshots", () => {
+	const windows = parseGitHubCopilotUsage({
+		quota_snapshots: {
+			chat: { entitlement: 0, remaining: 0 },
 		},
 	});
 	assert.equal(windows.length, 0);

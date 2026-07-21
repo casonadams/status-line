@@ -23,6 +23,26 @@ test("formatStatusLineQuotaStatus: percent-only window", () => {
 	assert.equal(text, "70%");
 });
 
+test("formatStatusLineQuotaStatus: unlimited window", () => {
+	const text = formatStatusLineQuotaStatus([base({ label: "Unlimited", unlimited: true, resetsAt: new Date(0) })]);
+	assert.equal(text, "unlimited");
+});
+
+test("formatStatusLineQuotaStatus: credit balance", () => {
+	const text = formatStatusLineQuotaStatus([
+		base({
+			provider: "openai-codex",
+			label: "Credits",
+			usedValue: 12.34,
+			limitValue: 12.34,
+			isCurrency: true,
+			usedPercent: 0,
+			resetsAt: new Date(0),
+		}),
+	]);
+	assert.equal(text, "$12.34");
+});
+
 test("formatStatusLineQuotaStatus: currency window", () => {
 	const text = formatStatusLineQuotaStatus([
 		base({

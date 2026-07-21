@@ -19,4 +19,5 @@ export interface QuotaWindow {
 	limitValue: number;
 	isCurrency?: boolean;
 	limited?: boolean;
+	unlimited?: boolean;
 }

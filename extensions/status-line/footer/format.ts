@@ -1,3 +1,4 @@
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { fitRightAligned, formatTokens, sanitizeStatusText } from "../formatters.ts";
@@ -13,20 +14,22 @@ type SessionUsageTotals = {
 	usingSubscription: boolean;
 };
 
-function getStatus(statuses: ReadonlyMap<string, string | undefined>, ...keys: string[]): string | undefined {
+type SelectedStatus = { key: string; text: string };
+
+function getStatus(statuses: ReadonlyMap<string, string | undefined>, ...keys: string[]): SelectedStatus | undefined {
 	for (const key of keys) {
-		const value = statuses.get(key);
-		if (value) return value;
+		const text = statuses.get(key);
+		if (text) return { key, text };
 	}
 	return undefined;
 }
 
-function getTopRightStatus(footerData: ReadonlyFooterDataProvider): string | undefined {
+function getTopRightStatus(footerData: ReadonlyFooterDataProvider): SelectedStatus | undefined {
 	const statuses = footerData.getExtensionStatuses();
-	return (
-		getStatus(statuses, "status-line", "quotas", "pi-quotas-usage") ??
-		Array.from(statuses.entries()).find(([key, text]) => text && !INLINE_STATUS_KEYS.has(key))?.[1]
-	);
+	const preferred = getStatus(statuses, "status-line", "quotas", "pi-quotas-usage");
+	if (preferred) return preferred;
+	const entry = Array.from(statuses.entries()).find(([key, text]) => text && !INLINE_STATUS_KEYS.has(key));
+	return entry?.[1] ? { key: entry[0], text: entry[1] } : undefined;
 }
 
 function getOptimizerStatus(footerData: ReadonlyFooterDataProvider): string | undefined {
@@ -84,18 +87,28 @@ function getCurrentThinkingLevel(ctx: ExtensionContext): string {
 	return "off";
 }
 
+function abbreviateHome(cwd: string, home: string | undefined): string {
+	if (!home) return cwd;
+	const relativePath = relative(resolve(home), resolve(cwd));
+	const isInside =
+		relativePath === "" || (!relativePath.startsWith(`..${sep}`) && relativePath !== ".." && !isAbsolute(relativePath));
+	if (!isInside) return cwd;
+	return relativePath ? `~${sep}${relativePath}` : "~";
+}
+
 export function formatTopLine(ctx: ExtensionContext, footerData: ReadonlyFooterDataProvider, width: number): string {
 	const theme = ctx.ui.theme;
 	const home = process.env.HOME || process.env.USERPROFILE;
-	let pwd = ctx.sessionManager.getCwd();
-	if (home && pwd.startsWith(home)) pwd = `~${pwd.slice(home.length)}`;
+	let pwd = abbreviateHome(ctx.sessionManager.getCwd(), home);
 	const branch = footerData.getGitBranch();
 	if (branch) pwd = `${pwd} (${branch})`;
 	const sessionName = ctx.sessionManager.getSessionName();
 	if (sessionName) pwd = `${pwd} • ${sessionName}`;
 	const left = theme.fg("dim", pwd);
 	const status = getTopRightStatus(footerData);
-	return status ? fitRightAligned(left, status, width) : truncateToWidth(left, width, theme.fg("dim", "..."));
+	return status
+		? fitRightAligned(left, sanitizeStatusText(status.text), width)
+		: truncateToWidth(left, width, theme.fg("dim", "..."));
 }
 
 function buildUsageParts(totals: SessionUsageTotals, contextPercent: string, contextWindow: number): string[] {
@@ -130,8 +143,9 @@ export function formatStatsLine(ctx: ExtensionContext, footerData: ReadonlyFoote
 }
 
 export function formatExtensionStatuses(footerData: ReadonlyFooterDataProvider, width: number): string | undefined {
+	const selected = getTopRightStatus(footerData);
 	const statuses = Array.from(footerData.getExtensionStatuses().entries())
-		.filter(([key, text]) => text && !INLINE_STATUS_KEYS.has(key))
+		.filter(([key, text]) => text && !INLINE_STATUS_KEYS.has(key) && key !== selected?.key)
 		.map(([, text]) => sanitizeStatusText(text as string));
 	if (statuses.length === 0) return undefined;
 	return truncateToWidth(statuses.join(" "), width, "...");

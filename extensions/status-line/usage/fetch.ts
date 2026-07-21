@@ -35,6 +35,7 @@ type CacheEntry = {
 	fetchedAt?: number;
 	failureCount?: number;
 	retryAt?: number;
+	pending?: Promise<QuotasResult>;
 };
 
 export type QuotaCache = {
@@ -67,8 +68,17 @@ export async function fetchProviderQuotas(
 	if (entry.result && !entry.result.success && entry.retryAt && now < entry.retryAt) {
 		return entry.result;
 	}
+	if (entry.pending) return entry.pending;
 
-	const result = await PROVIDER_FETCHERS[provider](auth);
+	const pending = PROVIDER_FETCHERS[provider](auth);
+	cache.set(provider, { ...entry, pending });
+	let result: QuotasResult;
+	try {
+		result = await pending;
+	} catch (error) {
+		cache.set(provider, entry);
+		throw error;
+	}
 	const fetchedAt = Date.now();
 	if (result.success) {
 		cache.set(provider, { result, fetchedAt, failureCount: 0 });

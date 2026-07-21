@@ -19,7 +19,9 @@ function formatCurrency(value: number): string {
 }
 
 function formatQuotaWindowValue(window: QuotaWindow): string {
+	if (window.unlimited) return "unlimited";
 	if (window.label === "Spend cap") return window.limited ? "REACHED" : "OK";
+	if (window.label === "Credits") return formatCurrency(window.usedValue);
 
 	const remaining = Math.max(0, window.limitValue - window.usedValue);
 	const percent = formatPercent(100 - window.usedPercent);

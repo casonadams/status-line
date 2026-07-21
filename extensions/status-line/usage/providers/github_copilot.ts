@@ -12,7 +12,7 @@ import {
 	safePercent,
 	success,
 } from "../helpers.ts";
-import type { QuotaWindow } from "../types.ts";
+import type { QuotasResult, QuotaWindow } from "../types.ts";
 
 function copilotHeaders(authHeader: string): Record<string, string> {
 	return {
@@ -76,6 +76,7 @@ export function parseGitHubCopilotUsage(data: CopilotUsageResponse | undefined):
 	const resetAt = parseDateish(data?.quota_reset_date ?? data?.quota_reset_date_utc ?? data?.limited_user_reset_date);
 	const periodSeconds = monthWindowSeconds(resetAt);
 	const snapshots = data?.quota_snapshots;
+	let hasUnlimitedQuota = false;
 	if (snapshots && typeof snapshots === "object") {
 		const mappings: Array<[string, string]> = [
 			["premium_interactions", "Premium / month"],
@@ -84,7 +85,11 @@ export function parseGitHubCopilotUsage(data: CopilotUsageResponse | undefined):
 		];
 		for (const [key, label] of mappings) {
 			const snap = snapshots[key];
-			if (!snap || snap.unlimited) continue;
+			if (!snap) continue;
+			if (snap.unlimited) {
+				hasUnlimitedQuota = true;
+				continue;
+			}
 			const entitlement = Number(snap.entitlement ?? 0);
 			const remaining = Number(snap.remaining ?? snap.quota_remaining ?? 0);
 			if (entitlement <= 0) continue;
@@ -99,19 +104,35 @@ export function parseGitHubCopilotUsage(data: CopilotUsageResponse | undefined):
 			});
 		}
 	}
+	if (windows.length === 0 && hasUnlimitedQuota) {
+		windows.push({
+			provider: "github-copilot",
+			label: "Unlimited",
+			usedPercent: 0,
+			resetsAt: new Date(0),
+			windowSeconds: 0,
+			usedValue: 0,
+			limitValue: 0,
+			unlimited: true,
+		});
+	}
 	return windows;
 }
 
-async function tryWithToken(token: string, scheme: "Bearer" | "token") {
+async function tryWithToken(token: string, scheme: "Bearer" | "token"): Promise<QuotasResult> {
 	const usage = await tryGitHubUserEndpoint(`${scheme} ${token}`);
-	return usage.ok ? success("github-copilot", parseGitHubCopilotUsage(usage.data)) : null;
+	return usage.ok ? success("github-copilot", parseGitHubCopilotUsage(usage.data)) : failure(usage.message, usage.kind);
 }
 
 export async function fetchGitHubCopilotQuotas(auth: QuotaAuth) {
+	let lastFailure: QuotasResult | undefined;
 	const githubToken = githubOAuthToken(auth);
 	if (githubToken) {
-		const result = (await tryWithToken(githubToken, "Bearer")) ?? (await tryWithToken(githubToken, "token"));
-		if (result) return result;
+		for (const scheme of ["Bearer", "token"] as const) {
+			const result = await tryWithToken(githubToken, scheme);
+			if (result.success) return result;
+			lastFailure = result;
+		}
 	}
 
 	const accessToken = await providerAccessToken(auth, "github-copilot");
@@ -121,10 +142,11 @@ export async function fetchGitHubCopilotQuotas(auth: QuotaAuth) {
 		});
 		if (exchange.ok && exchange.data?.token) {
 			const result = await tryWithToken(exchange.data.token, "Bearer");
-			if (result) return result;
+			if (result.success) return result;
 		}
 		const direct = await tryWithToken(accessToken, "token");
-		if (direct) return direct;
+		if (direct.success) return direct;
+		lastFailure = direct;
 	}
 
 	const cliToken = ghCliToken();
@@ -134,5 +156,5 @@ export async function fetchGitHubCopilotQuotas(auth: QuotaAuth) {
 		return failure(cliUsage.message, cliUsage.kind);
 	}
 
-	return failure("No GitHub Copilot credentials found", "config");
+	return lastFailure ?? failure("No GitHub Copilot credentials found", "config");
 }

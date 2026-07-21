@@ -8,6 +8,7 @@ const EXTENSION_ID = "status-line";
 
 class StatusLineExtension {
 	private currentProvider: string | undefined;
+	private refreshGeneration = 0;
 	private readonly cache = createQuotaCache();
 	private readonly pi: ExtensionAPI;
 
@@ -26,9 +27,8 @@ class StatusLineExtension {
 		ctx.ui.setStatus(EXTENSION_ID, status ? ctx.ui.theme.fg(color, status) : undefined);
 	}
 
-	private async resolveStatus(ctx: ExtensionContext): Promise<string | undefined> {
-		const provider = this.currentProvider;
-		if (!provider || !isSupportedProvider(provider)) return undefined;
+	private async resolveStatus(ctx: ExtensionContext, provider: string): Promise<string | undefined> {
+		if (!isSupportedProvider(provider)) return undefined;
 
 		const auth: QuotaAuth = {
 			getApiKey: (providerId) => ctx.modelRegistry.getApiKeyForProvider(providerId),
@@ -39,38 +39,38 @@ class StatusLineExtension {
 		return formatStatusLineQuotaStatus(result.data.windows);
 	}
 
-	private setErrorStatus(ctx: ExtensionContext): void {
-		this.setStatus(
-			ctx,
-			ctx.model ? `quota fetch failed (${this.currentProvider ?? "unknown"})` : "no model",
-			"warning",
-		);
+	private setErrorStatus(ctx: ExtensionContext, provider: string): void {
+		this.setStatus(ctx, ctx.model ? `quota fetch failed (${provider})` : "no model", "warning");
 	}
 
-	private async refreshStatus(ctx: ExtensionContext): Promise<void> {
+	private async refreshStatus(ctx: ExtensionContext, generation: number): Promise<void> {
 		if (!ctx.hasUI) return;
-		if (!isSupportedProvider(this.currentProvider)) {
+		const provider = this.currentProvider;
+		if (!isSupportedProvider(provider)) {
 			this.setStatus(ctx, undefined);
 			return;
 		}
 		try {
-			const status = await this.resolveStatus(ctx);
+			const status = await this.resolveStatus(ctx, provider);
+			if (generation !== this.refreshGeneration) return;
 			if (status) {
 				this.setStatus(ctx, status);
 				return;
 			}
-			this.setErrorStatus(ctx);
+			this.setErrorStatus(ctx, provider);
 		} catch {
-			this.setErrorStatus(ctx);
+			if (generation === this.refreshGeneration) this.setErrorStatus(ctx, provider);
 		}
 	}
 
 	private async refreshForContext(ctx: ExtensionContext): Promise<void> {
+		const generation = ++this.refreshGeneration;
 		this.currentProvider = ctx.model?.provider;
-		await this.refreshStatus(ctx);
+		await this.refreshStatus(ctx, generation);
 	}
 
 	private stop(ctx: ExtensionContext): void {
+		this.refreshGeneration++;
 		this.currentProvider = undefined;
 		if (ctx.hasUI) {
 			ctx.ui.setFooter(undefined);
@@ -79,11 +79,12 @@ class StatusLineExtension {
 	}
 
 	private async start(ctx: ExtensionContext): Promise<void> {
+		const generation = ++this.refreshGeneration;
 		this.currentProvider = ctx.model?.provider;
 		if (!ctx.hasUI) return;
 
 		installStatusLineFooter(ctx);
-		await this.refreshStatus(ctx);
+		await this.refreshStatus(ctx, generation);
 	}
 }
 
