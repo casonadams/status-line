@@ -1,2 +1,22 @@
 node_modules
 .DS_Store
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build output
+coverage/
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp

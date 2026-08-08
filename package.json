@@ -2,6 +2,7 @@
 	"name": "status-line",
 	"version": "0.1.0",
 	"private": false,
+	"license": "MIT",
 	"type": "module",
 	"description": "A custom status-line and provider quota extension for pi.",
 	"keywords": [

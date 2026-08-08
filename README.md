@@ -1,5 +1,7 @@
 # Status Line
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Status Line is a pi extension package that replaces the default footer with a compact view of:
 
 - Current directory, Git branch, and session name
