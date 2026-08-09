@@ -25,15 +25,23 @@ export interface AntigravityModelInfo {
 
 export interface AntigravityLoadCodeAssistResponse {
 	cloudaicompanionProject?: string | { id?: string };
-	planInfo?: {
-		monthlyPromptCredits?: number;
-		planType?: string;
-	};
+	planInfo?: { monthlyPromptCredits?: number; planType?: string };
 	availablePromptCredits?: number;
 }
 
 export interface AntigravityFetchAvailableModelsResponse {
 	models?: Record<string, AntigravityModelInfo> | AntigravityModelInfo[];
+}
+
+async function resolveAntigravityToken(auth: QuotaAuth): Promise<string | undefined> {
+	for (const key of ["google-antigravity", "antigravity", "google"]) {
+		const token = await providerAccessToken(auth, key);
+		if (token) return token;
+		const cred = auth.getCredential(key) as Record<string, unknown> | undefined;
+		const found = cred?.access_token ?? cred?.accessToken ?? cred?.token ?? cred?.apiKey;
+		if (typeof found === "string" && found) return found;
+	}
+	return undefined;
 }
 
 function extractModelEntries(
@@ -70,8 +78,7 @@ export function parseGoogleAntigravityUsage(
 		const remainingFraction = Math.max(0, Math.min(1, quota.remainingFraction ?? 1));
 		const usedPercent = Math.max(0, Math.min(100, Math.round((1 - remainingFraction) * 100)));
 		const resetsAt = parseDateish(quota.resetTime);
-		const resetMs = resetsAt.getTime() - Date.now();
-		const isWeekly = resetMs > 36 * 60 * 60 * 1000;
+		const isWeekly = resetsAt.getTime() - Date.now() > 36 * 60 * 60 * 1000;
 		const label =
 			i === 0 ? (isWeekly ? "7d" : "5h") : isWeekly ? "7d" : windows.some((w) => w.label === "5h") ? "7d" : "5h";
 
@@ -90,11 +97,10 @@ export function parseGoogleAntigravityUsage(
 	const credits = codeAssistData?.availablePromptCredits;
 	const monthly = codeAssistData?.planInfo?.monthlyPromptCredits;
 	if (monthly != null && monthly > 0 && credits != null) {
-		const used = Math.max(0, monthly - credits);
 		windows.push({
 			provider: "google-antigravity",
 			label: "Credits",
-			usedPercent: safePercent(used, monthly),
+			usedPercent: safePercent(Math.max(0, monthly - credits), monthly),
 			resetsAt: new Date(0),
 			windowSeconds: 0,
 			usedValue: credits,
@@ -106,7 +112,7 @@ export function parseGoogleAntigravityUsage(
 }
 
 export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<QuotasResult> {
-	const accessToken = await providerAccessToken(auth, "google-antigravity");
+	const accessToken = await resolveAntigravityToken(auth);
 	if (!accessToken) return failure("No Google Antigravity OAuth token found", "config");
 
 	const baseUrls = ["https://cloudcode-pa.googleapis.com", "https://daily-cloudcode-pa.sandbox.googleapis.com"];
@@ -130,30 +136,17 @@ export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<Quo
 		if (loadResult.ok || loadResult.kind === "cancelled" || loadResult.kind === "timeout") break;
 	}
 
-	if (!loadResult?.ok) {
+	if (!loadResult?.ok)
 		return failure(loadResult?.message ?? "Failed to load Code Assist", loadResult?.kind ?? "network");
-	}
 
-	let projectId: string | undefined;
 	const companionProject = loadResult.data.cloudaicompanionProject;
-	if (typeof companionProject === "string") {
-		projectId = companionProject;
-	} else if (companionProject && typeof companionProject === "object" && typeof companionProject.id === "string") {
-		projectId = companionProject.id;
-	}
+	const projectId = typeof companionProject === "string" ? companionProject : companionProject?.id;
 
 	const modelsResult = await fetchJson<AntigravityFetchAvailableModelsResponse>(
 		`${baseUrlUsed}/v1internal:fetchAvailableModels`,
-		{
-			method: "POST",
-			headers,
-			body: JSON.stringify(projectId ? { project: projectId } : {}),
-		},
+		{ method: "POST", headers, body: JSON.stringify(projectId ? { project: projectId } : {}) },
 	);
 
-	if (!modelsResult.ok) {
-		return failure(modelsResult.message, modelsResult.kind);
-	}
-
+	if (!modelsResult.ok) return failure(modelsResult.message, modelsResult.kind);
 	return success("google-antigravity", parseGoogleAntigravityUsage(loadResult.data, modelsResult.data));
 }

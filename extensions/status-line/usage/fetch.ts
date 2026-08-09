@@ -12,8 +12,26 @@ export const SUPPORTED_PROVIDERS: SupportedQuotaProvider[] = [
 	"google-antigravity",
 ];
 
+export function normalizeProvider(provider: string | undefined): SupportedQuotaProvider | undefined {
+	if (!provider) return undefined;
+	const lower = provider.toLowerCase();
+	if (lower === "google-antigravity" || lower === "antigravity" || lower === "google") {
+		return "google-antigravity";
+	}
+	if (lower === "openai-codex" || lower === "codex") {
+		return "openai-codex";
+	}
+	if (lower === "github-copilot" || lower === "copilot") {
+		return "github-copilot";
+	}
+	if (lower === "anthropic") {
+		return "anthropic";
+	}
+	return undefined;
+}
+
 export function isSupportedProvider(provider: string | undefined): provider is SupportedQuotaProvider {
-	return SUPPORTED_PROVIDERS.includes(provider as SupportedQuotaProvider);
+	return normalizeProvider(provider) !== undefined;
 }
 
 const PROVIDER_TTLS_MS: Record<SupportedQuotaProvider, number> = {
@@ -63,9 +81,14 @@ const PROVIDER_FETCHERS: Record<SupportedQuotaProvider, (auth: QuotaAuth) => Pro
 
 export async function fetchProviderQuotas(
 	auth: QuotaAuth,
-	provider: SupportedQuotaProvider,
+	rawProvider: string,
 	cache: QuotaCache,
 ): Promise<QuotasResult> {
+	const provider = normalizeProvider(rawProvider);
+	if (!provider) {
+		return { success: false, error: { message: `Unsupported provider: ${rawProvider}`, kind: "config" } };
+	}
+
 	const entry = cache.get(provider) ?? {};
 	const now = Date.now();
 	const ttl = PROVIDER_TTLS_MS[provider];
