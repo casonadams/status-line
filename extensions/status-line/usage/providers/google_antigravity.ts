@@ -36,35 +36,32 @@ export interface AntigravityFetchAvailableModelsResponse {
 	models?: Record<string, AntigravityModelInfo> | AntigravityModelInfo[];
 }
 
+function extractModelEntries(
+	rawModels: AntigravityFetchAvailableModelsResponse["models"],
+): Array<[string, AntigravityModelInfo]> {
+	const modelEntries: Array<[string, AntigravityModelInfo]> = [];
+	if (Array.isArray(rawModels)) {
+		for (const m of rawModels) {
+			if (m && typeof m === "object") modelEntries.push([m.model || m.displayName || "unknown", m]);
+		}
+	} else if (rawModels && typeof rawModels === "object") {
+		for (const [id, m] of Object.entries(rawModels)) {
+			if (m && typeof m === "object") modelEntries.push([id, m]);
+		}
+	}
+	return modelEntries.filter(([id, m]) => {
+		if (!m.quotaInfo) return false;
+		if (id.startsWith("chat_") || id.startsWith("tab_") || id.startsWith("rev")) return false;
+		return !id.includes("image") && !id.includes("mquery") && !id.includes("lite");
+	});
+}
+
 export function parseGoogleAntigravityUsage(
 	codeAssistData?: AntigravityLoadCodeAssistResponse,
 	modelsData?: AntigravityFetchAvailableModelsResponse,
 ): QuotaWindow[] {
 	const windows: QuotaWindow[] = [];
-	const rawModels = modelsData?.models;
-	const modelEntries: Array<[string, AntigravityModelInfo]> = [];
-
-	if (Array.isArray(rawModels)) {
-		for (const m of rawModels) {
-			if (m && typeof m === "object") {
-				const id = m.model || m.displayName || "unknown";
-				modelEntries.push([id, m]);
-			}
-		}
-	} else if (rawModels && typeof rawModels === "object") {
-		for (const [id, m] of Object.entries(rawModels)) {
-			if (m && typeof m === "object") {
-				modelEntries.push([id, m]);
-			}
-		}
-	}
-
-	const validModels = modelEntries.filter(([id, m]) => {
-		if (!m.quotaInfo) return false;
-		if (id.startsWith("chat_") || id.startsWith("tab_") || id.startsWith("rev")) return false;
-		if (id.includes("image") || id.includes("mquery") || id.includes("lite")) return false;
-		return true;
-	});
+	const validModels = extractModelEntries(modelsData?.models);
 
 	for (let i = 0; i < validModels.length; i++) {
 		const [, m] = validModels[i];
@@ -113,7 +110,6 @@ export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<Quo
 	if (!accessToken) return failure("No Google Antigravity OAuth token found", "config");
 
 	const baseUrls = ["https://cloudcode-pa.googleapis.com", "https://daily-cloudcode-pa.sandbox.googleapis.com"];
-
 	const headers = {
 		Authorization: `Bearer ${accessToken}`,
 		"Content-Type": "application/json",
@@ -122,22 +118,16 @@ export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<Quo
 
 	let loadResult: FetchJsonResult<AntigravityLoadCodeAssistResponse> | undefined;
 	let baseUrlUsed = baseUrls[0];
-
 	for (const baseUrl of baseUrls) {
 		baseUrlUsed = baseUrl;
 		loadResult = await fetchJson<AntigravityLoadCodeAssistResponse>(`${baseUrl}/v1internal:loadCodeAssist`, {
 			method: "POST",
 			headers,
 			body: JSON.stringify({
-				metadata: {
-					ideType: "ANTIGRAVITY",
-					platform: "PLATFORM_UNSPECIFIED",
-					pluginType: "GEMINI",
-				},
+				metadata: { ideType: "ANTIGRAVITY", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
 			}),
 		});
-		if (loadResult.ok) break;
-		if (loadResult.kind === "cancelled" || loadResult.kind === "timeout") break;
+		if (loadResult.ok || loadResult.kind === "cancelled" || loadResult.kind === "timeout") break;
 	}
 
 	if (!loadResult?.ok) {

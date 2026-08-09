@@ -292,7 +292,7 @@ test("google-antigravity: missing token returns config error", async () => {
 test("google-antigravity: hits loadCodeAssist and fetchAvailableModels endpoints", async () => {
 	const originalFetch = globalThis.fetch;
 	const urls = [];
-	globalThis.fetch = async (url, _init) => {
+	globalThis.fetch = async (url) => {
 		urls.push(url);
 		if (url.endsWith("/v1internal:loadCodeAssist")) {
 			return /** @type {Response} */ ({
