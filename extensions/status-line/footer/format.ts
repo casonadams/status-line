@@ -1,6 +1,6 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { fitRightAligned, formatTokens, sanitizeStatusText } from "../formatters.ts";
 
 const INLINE_STATUS_KEYS = new Set(["status-line", "optimizer"]);
@@ -136,9 +136,13 @@ export function formatStatsLine(ctx: ExtensionContext, footerData: ReadonlyFoote
 		[parts.join(" "), optimizerStatus && sanitizeStatusText(optimizerStatus)].filter(Boolean).join(" "),
 	);
 	const modelId = ctx.model?.id || "no-model";
-	const right = ctx.model?.reasoning
-		? theme.fg("dim", `${modelId} • ${getCurrentThinkingLevel(ctx)}`)
-		: theme.fg("dim", modelId);
+	const modelDetails = ctx.model?.reasoning ? `${modelId} • ${getCurrentThinkingLevel(ctx)}` : modelId;
+	const providerDetails = ctx.model ? `(${ctx.model.provider}) ${modelDetails}` : modelDetails;
+	const showProvider =
+		!!ctx.model &&
+		footerData.getAvailableProviderCount() > 1 &&
+		visibleWidth(left) + visibleWidth(providerDetails) + 2 <= width;
+	const right = theme.fg("dim", showProvider ? providerDetails : modelDetails);
 	return fitRightAligned(left, right, width);
 }
 

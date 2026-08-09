@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatExtensionStatuses, formatTopLine } from "./format.ts";
+import { formatExtensionStatuses, formatStatsLine, formatTopLine } from "./format.ts";
 
 function footerData(statuses = new Map()) {
 	return {
+		getAvailableProviderCount: () => 2,
 		getExtensionStatuses: () => statuses,
 		getGitBranch: () => null,
 	};
@@ -12,10 +13,14 @@ function footerData(statuses = new Map()) {
 
 function context(cwd) {
 	return {
+		model: { provider: "test-provider", id: "test-model", contextWindow: 1000, reasoning: true },
+		modelRegistry: { isUsingOAuth: () => false },
 		sessionManager: {
 			getCwd: () => cwd,
 			getSessionName: () => undefined,
+			getEntries: () => [{ type: "thinking_level_change", thinkingLevel: "medium" }],
 		},
+		getContextUsage: () => ({ percent: 10, contextWindow: 1000 }),
 		ui: { theme: { fg: (_color, text) => text } },
 	};
 }
@@ -30,6 +35,15 @@ test("formatExtensionStatuses excludes the status shown on the top line", () => 
 
 	assert.equal(formatTopLine(context("/work"), data, 80).trimEnd().endsWith("first status"), true);
 	assert.equal(formatExtensionStatuses(data, 80), "second status");
+});
+
+test("formatStatsLine shows provider when multiple providers are available and space permits", () => {
+	const data = footerData();
+	assert.equal(
+		formatStatsLine(context("/work"), data, 80).trimEnd().endsWith("(test-provider) test-model • medium"),
+		true,
+	);
+	assert.equal(formatStatsLine(context("/work"), data, 35).includes("test-provider"), false);
 });
 
 test("formatTopLine abbreviates only true descendants of the home directory", () => {
