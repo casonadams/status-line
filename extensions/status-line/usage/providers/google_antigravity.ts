@@ -10,32 +10,35 @@ import {
 } from "../helpers.ts";
 import type { QuotasResult, QuotaWindow } from "../types.ts";
 
-export interface AntigravityModelQuotaInfo {
-	remainingFraction?: number;
-	resetTime?: string;
-	isExhausted?: boolean;
-}
-
-export interface AntigravityModelInfo {
+export type AntigravityModelInfo = {
 	displayName?: string;
 	model?: string;
-	label?: string;
-	quotaInfo?: AntigravityModelQuotaInfo;
-}
+	quotaInfo?: { remainingFraction?: number; resetTime?: string; isExhausted?: boolean };
+};
 
 export interface AntigravityLoadCodeAssistResponse {
 	cloudaicompanionProject?: string | { id?: string };
-	planInfo?: { monthlyPromptCredits?: number; planType?: string };
+	planInfo?: { monthlyPromptCredits?: number };
 	availablePromptCredits?: number;
 }
 
-export interface AntigravityFetchAvailableModelsResponse {
+export type AntigravityFetchAvailableModelsResponse = {
 	models?: Record<string, AntigravityModelInfo> | AntigravityModelInfo[];
+};
+
+function tokenFromApiKey(apiKey: string | undefined): string | undefined {
+	if (!apiKey) return undefined;
+	try {
+		const parsed = JSON.parse(apiKey) as { token?: unknown };
+		return typeof parsed.token === "string" ? parsed.token : undefined;
+	} catch {
+		return apiKey;
+	}
 }
 
 async function resolveAntigravityToken(auth: QuotaAuth): Promise<string | undefined> {
 	for (const key of ["google-antigravity", "antigravity", "google"]) {
-		const token = await providerAccessToken(auth, key);
+		const token = tokenFromApiKey(await providerAccessToken(auth, key));
 		if (token) return token;
 		const cred = auth.getCredential(key) as Record<string, unknown> | undefined;
 		const found = cred?.access ?? cred?.access_token ?? cred?.accessToken ?? cred?.token ?? cred?.apiKey;
@@ -68,8 +71,8 @@ export function parseGoogleAntigravityUsage(
 	codeAssistData?: AntigravityLoadCodeAssistResponse,
 	modelsData?: AntigravityFetchAvailableModelsResponse,
 ): QuotaWindow[] {
-	const windows: QuotaWindow[] = [];
-	const validModels = extractModelEntries(modelsData?.models);
+	const windows: QuotaWindow[] = [],
+		validModels = extractModelEntries(modelsData?.models);
 
 	for (let i = 0; i < validModels.length; i++) {
 		const [, m] = validModels[i];
@@ -93,8 +96,8 @@ export function parseGoogleAntigravityUsage(
 		});
 	}
 
-	const credits = codeAssistData?.availablePromptCredits;
-	const monthly = codeAssistData?.planInfo?.monthlyPromptCredits;
+	const credits = codeAssistData?.availablePromptCredits,
+		monthly = codeAssistData?.planInfo?.monthlyPromptCredits;
 	if (monthly != null && monthly > 0 && credits != null) {
 		windows.push({
 			provider: "google-antigravity",

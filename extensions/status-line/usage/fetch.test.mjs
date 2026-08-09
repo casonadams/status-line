@@ -289,11 +289,11 @@ test("google-antigravity: missing token returns config error", async () => {
 	assert.equal(result.error.kind, "config");
 });
 
-test("google-antigravity: hits loadCodeAssist and fetchAvailableModels endpoints", async () => {
+test("google-antigravity: decodes provider API key and fetches usage endpoints", async () => {
 	const originalFetch = globalThis.fetch;
-	const urls = [];
-	globalThis.fetch = async (url) => {
-		urls.push(url);
+	const requests = [];
+	globalThis.fetch = async (url, init) => {
+		requests.push({ url, init });
 		if (url.endsWith("/v1internal:loadCodeAssist")) {
 			return /** @type {Response} */ ({
 				ok: true,
@@ -320,12 +320,17 @@ test("google-antigravity: hits loadCodeAssist and fetchAvailableModels endpoints
 		return /** @type {Response} */ ({ ok: false, status: 404, json: async () => ({}), text: async () => "" });
 	};
 	try {
-		const auth = makeAuth({ tokenProvider: "google-antigravity" });
+		const auth = {
+			getApiKey: async (provider) =>
+				provider === "antigravity" ? JSON.stringify({ token: "access-token", projectId: "proj-123" }) : undefined,
+			getCredential: () => undefined,
+		};
 		const result = await fetchGoogleAntigravityQuotas(auth);
 		assert.equal(result.success, true);
-		assert.equal(urls.length, 2);
-		assert.equal(urls[0], "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist");
-		assert.equal(urls[1], "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+		assert.equal(requests.length, 2);
+		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist");
+		assert.equal(requests[0].init.headers.Authorization, "Bearer access-token");
+		assert.equal(requests[1].url, "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
