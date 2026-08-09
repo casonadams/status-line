@@ -1,4 +1,4 @@
-export type SupportedQuotaProvider = "anthropic" | "openai-codex" | "github-copilot";
+export type SupportedQuotaProvider = "anthropic" | "openai-codex" | "github-copilot" | "google-antigravity";
 
 export type QuotasErrorKind = "cancelled" | "timeout" | "config" | "http" | "network";
 

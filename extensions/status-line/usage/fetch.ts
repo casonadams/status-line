@@ -1,10 +1,16 @@
 import type { QuotaAuth } from "./helpers.ts";
 import { fetchAnthropicQuotas } from "./providers/anthropic.ts";
 import { fetchGitHubCopilotQuotas } from "./providers/github_copilot.ts";
+import { fetchGoogleAntigravityQuotas } from "./providers/google_antigravity.ts";
 import { fetchCodexQuotas } from "./providers/openai_codex.ts";
 import type { QuotasResult, SupportedQuotaProvider } from "./types.ts";
 
-export const SUPPORTED_PROVIDERS: SupportedQuotaProvider[] = ["anthropic", "openai-codex", "github-copilot"];
+export const SUPPORTED_PROVIDERS: SupportedQuotaProvider[] = [
+	"anthropic",
+	"openai-codex",
+	"github-copilot",
+	"google-antigravity",
+];
 
 export function isSupportedProvider(provider: string | undefined): provider is SupportedQuotaProvider {
 	return SUPPORTED_PROVIDERS.includes(provider as SupportedQuotaProvider);
@@ -14,6 +20,7 @@ const PROVIDER_TTLS_MS: Record<SupportedQuotaProvider, number> = {
 	anthropic: 5 * 60_000,
 	"openai-codex": 60_000,
 	"github-copilot": 5 * 60_000,
+	"google-antigravity": 5 * 60_000,
 };
 
 const BACKOFF_UNIT_MS = 60_000;
@@ -51,6 +58,7 @@ const PROVIDER_FETCHERS: Record<SupportedQuotaProvider, (auth: QuotaAuth) => Pro
 	anthropic: fetchAnthropicQuotas,
 	"openai-codex": fetchCodexQuotas,
 	"github-copilot": fetchGitHubCopilotQuotas,
+	"google-antigravity": fetchGoogleAntigravityQuotas,
 };
 
 export async function fetchProviderQuotas(

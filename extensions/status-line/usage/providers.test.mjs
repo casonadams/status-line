@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { parseAnthropicUsage } from "./providers/anthropic.ts";
 import { parseGitHubCopilotUsage } from "./providers/github_copilot.ts";
+import { parseGoogleAntigravityUsage } from "./providers/google_antigravity.ts";
 import { parseCodexUsage } from "./providers/openai_codex.ts";
 
 // ── Anthropic ──────────────────────────────────────────────────────────────
@@ -138,4 +139,52 @@ test("parseCodexUsage: credits skipped when has_credits false", () => {
 		credits: { has_credits: false, balance: 12.34 },
 	});
 	assert.equal(windows.length, 0);
+});
+
+// ── Google Antigravity ─────────────────────────────────────────────────────
+
+test("parseGoogleAntigravityUsage: parses model quotas and prompt credits", () => {
+	const windows = parseGoogleAntigravityUsage(
+		{
+			planInfo: { monthlyPromptCredits: 1000 },
+			availablePromptCredits: 750,
+		},
+		{
+			models: {
+				"claude-sonnet-4-5": {
+					displayName: "Claude 3.5 Sonnet",
+					quotaInfo: { remainingFraction: 0.85, resetTime: "2026-01-01T05:00:00Z" },
+				},
+				"gemini-3-flash": {
+					displayName: "Gemini 3 Flash",
+					quotaInfo: { remainingFraction: 1.0, resetTime: "2026-01-01T05:00:00Z" },
+				},
+			},
+		},
+	);
+	assert.equal(windows.length, 3);
+	assert.equal(windows[0].provider, "google-antigravity");
+	assert.equal(windows[0].label, "5h");
+	assert.equal(windows[0].usedPercent, 15);
+	assert.equal(windows[1].label, "7d");
+	assert.equal(windows[1].usedPercent, 0);
+	assert.equal(windows[2].label, "Credits");
+	assert.equal(windows[2].usedValue, 750);
+	assert.equal(windows[2].limitValue, 1000);
+});
+
+test("parseGoogleAntigravityUsage: filters internal or image models", () => {
+	const windows = parseGoogleAntigravityUsage(undefined, {
+		models: {
+			chat_internal: { quotaInfo: { remainingFraction: 0.5 } },
+			tab_autocomplete: { quotaInfo: { remainingFraction: 0.5 } },
+			"image-gen-v1": { quotaInfo: { remainingFraction: 0.5 } },
+			"claude-sonnet-4-5": {
+				displayName: "Claude 3.5 Sonnet",
+				quotaInfo: { remainingFraction: 0.9, resetTime: "2026-01-01T05:00:00Z" },
+			},
+		},
+	});
+	assert.equal(windows.length, 1);
+	assert.equal(windows[0].usedPercent, 10);
 });

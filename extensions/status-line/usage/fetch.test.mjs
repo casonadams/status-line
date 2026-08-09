@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { fetchProviderQuotas, isSupportedProvider } from "./fetch.ts";
 import { fetchAnthropicQuotas } from "./providers/anthropic.ts";
 import { fetchGitHubCopilotQuotas } from "./providers/github_copilot.ts";
+import { fetchGoogleAntigravityQuotas } from "./providers/google_antigravity.ts";
 import { fetchCodexQuotas } from "./providers/openai_codex.ts";
 
 function makeAuth(overrides = {}) {
@@ -31,6 +32,7 @@ test("isSupportedProvider: known providers", () => {
 	assert.equal(isSupportedProvider("anthropic"), true);
 	assert.equal(isSupportedProvider("openai-codex"), true);
 	assert.equal(isSupportedProvider("github-copilot"), true);
+	assert.equal(isSupportedProvider("google-antigravity"), true);
 });
 
 test("isSupportedProvider: unknown and undefined are false", () => {
@@ -277,5 +279,54 @@ test("github-copilot: no credentials returns config error", async () => {
 		assert.equal(result.error.kind, "config");
 	} finally {
 		process.env.PATH = originalPath;
+	}
+});
+
+test("google-antigravity: missing token returns config error", async () => {
+	const auth = makeAuth();
+	const result = await fetchGoogleAntigravityQuotas(auth);
+	assert.equal(result.success, false);
+	assert.equal(result.error.kind, "config");
+});
+
+test("google-antigravity: hits loadCodeAssist and fetchAvailableModels endpoints", async () => {
+	const originalFetch = globalThis.fetch;
+	const urls = [];
+	globalThis.fetch = async (url, _init) => {
+		urls.push(url);
+		if (url.endsWith("/v1internal:loadCodeAssist")) {
+			return /** @type {Response} */ ({
+				ok: true,
+				status: 200,
+				json: async () => ({ cloudaicompanionProject: "proj-123" }),
+				text: async () => "",
+			});
+		}
+		if (url.endsWith("/v1internal:fetchAvailableModels")) {
+			return /** @type {Response} */ ({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					models: {
+						"claude-sonnet-4-5": {
+							displayName: "Claude 3.5 Sonnet",
+							quotaInfo: { remainingFraction: 0.8, resetTime: "2026-01-01T05:00:00Z" },
+						},
+					},
+				}),
+				text: async () => "",
+			});
+		}
+		return /** @type {Response} */ ({ ok: false, status: 404, json: async () => ({}), text: async () => "" });
+	};
+	try {
+		const auth = makeAuth({ tokenProvider: "google-antigravity" });
+		const result = await fetchGoogleAntigravityQuotas(auth);
+		assert.equal(result.success, true);
+		assert.equal(urls.length, 2);
+		assert.equal(urls[0], "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist");
+		assert.equal(urls[1], "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+	} finally {
+		globalThis.fetch = originalFetch;
 	}
 });

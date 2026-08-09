@@ -4,6 +4,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 	"openai-codex": "Codex",
 	anthropic: "Anthropic",
 	"github-copilot": "GitHub Copilot",
+	"google-antigravity": "Google Antigravity",
 	ollama: "Ollama",
 	"llama-cpp": "llama.cpp",
 	mlx: "MLX",
