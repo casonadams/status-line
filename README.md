@@ -6,8 +6,8 @@ Status Line is a pi extension package that replaces the default footer with a co
 
 - Current directory, Git branch, and session name
 - Session token usage, cost, context usage, model, and thinking level
-- Remaining provider quota and reset time for Anthropic, OpenAI Codex, and GitHub Copilot
-- Status messages published by other extensions
+- Remaining provider quota and reset time for Anthropic, Google Antigravity, OpenAI Codex, and GitHub Copilot
+- Collapsible status messages published by other extensions
 
 ## Install
 
@@ -16,6 +16,10 @@ pi install git:git@github.com:casonadams/status-line.git
 ```
 
 The extension uses credentials already configured in pi. GitHub Copilot quota lookup can also fall back to the token from `gh auth token`.
+
+## Extension statuses
+
+Extension statuses are hidden by default and summarized on the top line. Toggle the status line with `/status-line.statuses` or `Ctrl+Shift+O`.
 
 ## Development
 

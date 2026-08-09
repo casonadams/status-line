@@ -1,6 +1,6 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { fitRightAligned, formatTokens, sanitizeStatusText } from "../formatters.ts";
 
 const INLINE_STATUS_KEYS = new Set(["status-line", "optimizer"]);
@@ -25,11 +25,7 @@ function getStatus(statuses: ReadonlyMap<string, string | undefined>, ...keys: s
 }
 
 function getTopRightStatus(footerData: ReadonlyFooterDataProvider): SelectedStatus | undefined {
-	const statuses = footerData.getExtensionStatuses();
-	const preferred = getStatus(statuses, "status-line", "quotas", "pi-quotas-usage");
-	if (preferred) return preferred;
-	const entry = Array.from(statuses.entries()).find(([key, text]) => text && !INLINE_STATUS_KEYS.has(key));
-	return entry?.[1] ? { key: entry[0], text: entry[1] } : undefined;
+	return getStatus(footerData.getExtensionStatuses(), "status-line", "quotas", "pi-quotas-usage");
 }
 
 function getOptimizerStatus(footerData: ReadonlyFooterDataProvider): string | undefined {
@@ -96,7 +92,12 @@ function abbreviateHome(cwd: string, home: string | undefined): string {
 	return relativePath ? `~${sep}${relativePath}` : "~";
 }
 
-export function formatTopLine(ctx: ExtensionContext, footerData: ReadonlyFooterDataProvider, width: number): string {
+export function formatTopLine(
+	ctx: ExtensionContext,
+	footerData: ReadonlyFooterDataProvider,
+	options: { width: number; showExtensionStatuses?: boolean },
+): string {
+	const { width, showExtensionStatuses = false } = options;
 	const theme = ctx.ui.theme;
 	const home = process.env.HOME || process.env.USERPROFILE;
 	let pwd = abbreviateHome(ctx.sessionManager.getCwd(), home);
@@ -106,9 +107,12 @@ export function formatTopLine(ctx: ExtensionContext, footerData: ReadonlyFooterD
 	if (sessionName) pwd = `${pwd} • ${sessionName}`;
 	const left = theme.fg("dim", pwd);
 	const status = getTopRightStatus(footerData);
-	return status
-		? fitRightAligned(left, sanitizeStatusText(status.text), width)
-		: truncateToWidth(left, width, theme.fg("dim", "..."));
+	const hiddenCount = showExtensionStatuses ? 0 : getExtensionStatusTexts(footerData).length;
+	const hiddenIndicator = hiddenCount
+		? theme.fg("dim", `+${hiddenCount} hidden status${hiddenCount === 1 ? "" : "es"}`)
+		: undefined;
+	const right = [status && sanitizeStatusText(status.text), hiddenIndicator].filter(Boolean).join(" • ");
+	return right ? fitRightAligned(left, right, width) : truncateToWidth(left, width, theme.fg("dim", "..."));
 }
 
 function buildUsageParts(totals: SessionUsageTotals, contextPercent: string, contextWindow: number): string[] {
@@ -137,20 +141,17 @@ export function formatStatsLine(ctx: ExtensionContext, footerData: ReadonlyFoote
 	);
 	const modelId = ctx.model?.id || "no-model";
 	const modelDetails = ctx.model?.reasoning ? `${modelId} • ${getCurrentThinkingLevel(ctx)}` : modelId;
-	const providerDetails = ctx.model ? `(${ctx.model.provider}) ${modelDetails}` : modelDetails;
-	const showProvider =
-		!!ctx.model &&
-		footerData.getAvailableProviderCount() > 1 &&
-		visibleWidth(left) + visibleWidth(providerDetails) + 2 <= width;
-	const right = theme.fg("dim", showProvider ? providerDetails : modelDetails);
-	return fitRightAligned(left, right, width);
+	return fitRightAligned(left, theme.fg("dim", modelDetails), width);
+}
+
+function getExtensionStatusTexts(footerData: ReadonlyFooterDataProvider): string[] {
+	const selected = getTopRightStatus(footerData);
+	return Array.from(footerData.getExtensionStatuses().entries())
+		.filter(([key, text]) => text && !INLINE_STATUS_KEYS.has(key) && key !== selected?.key)
+		.map(([, text]) => sanitizeStatusText(text as string));
 }
 
 export function formatExtensionStatuses(footerData: ReadonlyFooterDataProvider, width: number): string | undefined {
-	const selected = getTopRightStatus(footerData);
-	const statuses = Array.from(footerData.getExtensionStatuses().entries())
-		.filter(([key, text]) => text && !INLINE_STATUS_KEYS.has(key) && key !== selected?.key)
-		.map(([, text]) => sanitizeStatusText(text as string));
-	if (statuses.length === 0) return undefined;
-	return truncateToWidth(statuses.join(" "), width, "...");
+	const statuses = getExtensionStatusTexts(footerData);
+	return statuses.length > 0 ? truncateToWidth(statuses.join(" "), width, "...") : undefined;
 }

@@ -25,33 +25,40 @@ function context(cwd) {
 	};
 }
 
-test("formatExtensionStatuses excludes the status shown on the top line", () => {
+test("formatTopLine indicates hidden extension statuses", () => {
 	const data = footerData(
 		new Map([
-			["first", "first status"],
-			["second", "second status"],
+			["status-line", "25% 4h30m"],
+			["mcp", "MCP: 2 servers enabled"],
 		]),
 	);
 
-	assert.equal(formatTopLine(context("/work"), data, 80).trimEnd().endsWith("first status"), true);
-	assert.equal(formatExtensionStatuses(data, 80), "second status");
-});
-
-test("formatStatsLine shows provider when multiple providers are available and space permits", () => {
-	const data = footerData();
 	assert.equal(
-		formatStatsLine(context("/work"), data, 80).trimEnd().endsWith("(test-provider) test-model • medium"),
+		formatTopLine(context("/work"), data, { width: 80 }).trimEnd().endsWith("25% 4h30m • +1 hidden status"),
 		true,
 	);
-	assert.equal(formatStatsLine(context("/work"), data, 35).includes("test-provider"), false);
+	assert.equal(
+		formatTopLine(context("/work"), data, { width: 80, showExtensionStatuses: true }).trimEnd().endsWith("25% 4h30m"),
+		true,
+	);
+	assert.equal(formatExtensionStatuses(data, 80), "MCP: 2 servers enabled");
+});
+
+test("formatStatsLine omits the provider", () => {
+	const line = formatStatsLine(context("/work"), footerData(), 80);
+	assert.equal(line.trimEnd().endsWith("test-model • medium"), true);
+	assert.equal(line.includes("test-provider"), false);
 });
 
 test("formatTopLine abbreviates only true descendants of the home directory", () => {
 	const originalHome = process.env.HOME;
 	process.env.HOME = "/Users/alice";
 	try {
-		assert.equal(formatTopLine(context("/Users/alice/project"), footerData(), 80), "~/project");
-		assert.equal(formatTopLine(context("/Users/alice-work/project"), footerData(), 80), "/Users/alice-work/project");
+		assert.equal(formatTopLine(context("/Users/alice/project"), footerData(), { width: 80 }), "~/project");
+		assert.equal(
+			formatTopLine(context("/Users/alice-work/project"), footerData(), { width: 80 }),
+			"/Users/alice-work/project",
+		);
 	} finally {
 		process.env.HOME = originalHome;
 	}

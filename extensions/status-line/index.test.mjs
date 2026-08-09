@@ -21,15 +21,50 @@ function makeContext(provider, statuses) {
 		},
 		ui: {
 			theme: { fg: (_color, text) => text },
+			notify: () => {},
 			setFooter: () => {},
 			setStatus: (_key, status) => statuses.push(status),
 		},
 	};
 }
 
+function makeExtensionApi(handlers) {
+	return {
+		on: (event, handler) => handlers.set(event, handler),
+		registerCommand: () => {},
+		registerShortcut: () => {},
+	};
+}
+
+test("status command toggles extension status visibility", () => {
+	const handlers = new Map();
+	let command;
+	let shortcut;
+	installStatusLine({
+		on: (event, handler) => handlers.set(event, handler),
+		registerCommand: (name, options) => {
+			if (name === "status-line.statuses") command = options;
+		},
+		registerShortcut: (key, options) => {
+			if (key === "ctrl+shift+o") shortcut = options;
+		},
+	});
+	const notifications = [];
+	let footerUpdates = 0;
+	const ctx = makeContext(undefined, []);
+	ctx.ui.notify = (message) => notifications.push(message);
+	ctx.ui.setFooter = () => footerUpdates++;
+
+	command.handler("", ctx);
+	shortcut.handler(ctx);
+
+	assert.equal(footerUpdates, 2);
+	assert.deepEqual(notifications, ["Extension statuses shown", "Extension statuses hidden"]);
+});
+
 test("a completed refresh cannot restore status after shutdown", async () => {
 	const handlers = new Map();
-	installStatusLine({ on: (event, handler) => handlers.set(event, handler) });
+	installStatusLine(makeExtensionApi(handlers));
 	const response = deferred();
 	const originalFetch = globalThis.fetch;
 	globalThis.fetch = () => response.promise;
@@ -54,7 +89,7 @@ test("a completed refresh cannot restore status after shutdown", async () => {
 
 test("a completed refresh cannot restore status after switching to an unsupported provider", async () => {
 	const handlers = new Map();
-	installStatusLine({ on: (event, handler) => handlers.set(event, handler) });
+	installStatusLine(makeExtensionApi(handlers));
 	const response = deferred();
 	const originalFetch = globalThis.fetch;
 	globalThis.fetch = () => response.promise;

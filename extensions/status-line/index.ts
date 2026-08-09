@@ -9,6 +9,7 @@ const EXTENSION_ID = "status-line";
 class StatusLineExtension {
 	private currentProvider: string | undefined;
 	private refreshGeneration = 0;
+	private showExtensionStatuses = false;
 	private readonly cache = createQuotaCache();
 	private readonly pi: ExtensionAPI;
 
@@ -17,6 +18,14 @@ class StatusLineExtension {
 	}
 
 	install(): void {
+		this.pi.registerCommand("status-line.statuses", {
+			description: "Toggle extension statuses in the footer",
+			handler: async (_args, ctx) => this.toggleExtensionStatuses(ctx),
+		});
+		this.pi.registerShortcut("ctrl+shift+o", {
+			description: "Toggle extension statuses in the footer",
+			handler: (ctx) => this.toggleExtensionStatuses(ctx),
+		});
 		this.pi.on("session_start", (_event, ctx) => void this.start(ctx));
 		this.pi.on("turn_end", (_event, ctx) => void this.refreshForContext(ctx));
 		this.pi.on("model_select", (_event, ctx) => void this.refreshForContext(ctx));
@@ -25,6 +34,13 @@ class StatusLineExtension {
 
 	private setStatus(ctx: ExtensionContext, status?: string, color: "dim" | "warning" = "dim"): void {
 		ctx.ui.setStatus(EXTENSION_ID, status ? ctx.ui.theme.fg(color, status) : undefined);
+	}
+
+	private toggleExtensionStatuses(ctx: ExtensionContext): void {
+		if (!ctx.hasUI) return;
+		this.showExtensionStatuses = !this.showExtensionStatuses;
+		installStatusLineFooter(ctx, () => this.showExtensionStatuses);
+		ctx.ui.notify(`Extension statuses ${this.showExtensionStatuses ? "shown" : "hidden"}`, "info");
 	}
 
 	private async resolveStatus(ctx: ExtensionContext, provider: string): Promise<string | undefined> {
@@ -84,7 +100,7 @@ class StatusLineExtension {
 		this.currentProvider = ctx.model?.provider;
 		if (!ctx.hasUI) return;
 
-		installStatusLineFooter(ctx);
+		installStatusLineFooter(ctx, () => this.showExtensionStatuses);
 		await this.refreshStatus(ctx, generation);
 	}
 }
