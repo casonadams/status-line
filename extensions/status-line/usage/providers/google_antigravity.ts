@@ -1,90 +1,94 @@
 import { failure, fetchJson, parseDateish, providerAccessToken, type QuotaAuth, success } from "../helpers.ts";
 import type { QuotasResult, QuotaWindow } from "../types.ts";
 
+interface AntigravityAuth {
+	token: string;
+	projectId: string;
+}
+
 interface AntigravityCredential {
 	access?: string;
 	access_token?: string;
 	accessToken?: string;
 	token?: string;
 	apiKey?: string;
+	projectId?: string;
 }
 
-interface AntigravityQuotaBucket {
-	bucketId?: string;
-	displayName?: string;
-	window?: string;
-	resetTime?: string;
-	remainingFraction?: number;
+interface AntigravityModel {
+	quotaInfo?: {
+		remainingFraction?: number;
+		resetTime?: string;
+		isExhausted?: boolean;
+	};
 }
 
-interface AntigravityQuotaSummary {
-	groups?: Array<{ buckets?: AntigravityQuotaBucket[] }>;
+interface AntigravityModelsResponse {
+	models?: Record<string, AntigravityModel>;
 }
 
-function tokenFromApiKey(apiKey: string | undefined): string | undefined {
-	if (!apiKey) return undefined;
+function authFromApiKey(apiKey: string | undefined): Partial<AntigravityAuth> {
+	if (!apiKey) return {};
 	try {
-		const parsed = JSON.parse(apiKey) as { token?: unknown };
-		return typeof parsed.token === "string" ? parsed.token : undefined;
+		const parsed = JSON.parse(apiKey) as { token?: unknown; projectId?: unknown };
+		return {
+			token: typeof parsed.token === "string" ? parsed.token : undefined,
+			projectId: typeof parsed.projectId === "string" ? parsed.projectId : undefined,
+		};
 	} catch {
-		return apiKey;
+		return { token: apiKey };
 	}
 }
 
-async function resolveAntigravityToken(auth: QuotaAuth): Promise<string | undefined> {
+async function resolveAntigravityAuth(auth: QuotaAuth): Promise<Partial<AntigravityAuth>> {
+	let resolved: Partial<AntigravityAuth> = {};
 	for (const key of ["google-antigravity", "antigravity", "google"]) {
-		const token = tokenFromApiKey(await providerAccessToken(auth, key));
-		if (token) return token;
+		resolved = { ...resolved, ...authFromApiKey(await providerAccessToken(auth, key)) };
 		const credential = auth.getCredential(key) as AntigravityCredential | undefined;
-		const stored =
+		resolved.token ??=
 			credential?.access ??
 			credential?.access_token ??
 			credential?.accessToken ??
 			credential?.token ??
 			credential?.apiKey;
-		if (stored) return stored;
+		resolved.projectId ??= credential?.projectId;
+		if (resolved.token && resolved.projectId) return resolved;
 	}
-	return undefined;
+	return resolved;
 }
 
-function quotaBuckets(data: AntigravityQuotaSummary | undefined): AntigravityQuotaBucket[] {
-	return (data?.groups ?? [])
-		.flatMap((group) => group.buckets ?? [])
-		.filter((bucket) => {
-			return typeof bucket.remainingFraction === "number" && Number.isFinite(bucket.remainingFraction);
-		});
-}
-
-function selectQuotaBucket(
-	buckets: readonly AntigravityQuotaBucket[],
+function selectModelQuota(
+	models: Record<string, AntigravityModel>,
 	modelId: string | undefined,
-): AntigravityQuotaBucket | undefined {
+): AntigravityModel["quotaInfo"] {
+	const entries = Object.entries(models).filter(([, model]) => model.quotaInfo);
 	const normalizedModel = modelId?.toLowerCase();
 	const matching = normalizedModel
-		? buckets.filter((bucket) => {
-				const id = bucket.bucketId?.toLowerCase();
-				return id === normalizedModel || id?.startsWith(`${normalizedModel}-`) || normalizedModel.startsWith(`${id}-`);
+		? entries.filter(([id]) => {
+				const normalizedId = id.toLowerCase();
+				return normalizedId === normalizedModel || normalizedId.startsWith(`${normalizedModel}-`);
 			})
 		: [];
-	const candidates = matching.length > 0 ? matching : buckets;
-	return candidates.reduce<AntigravityQuotaBucket | undefined>((lowest, bucket) => {
-		if (!lowest) return bucket;
-		return Number(bucket.remainingFraction) < Number(lowest.remainingFraction) ? bucket : lowest;
+	const candidates = matching.length > 0 ? matching : entries;
+	return candidates.reduce<AntigravityModel["quotaInfo"]>((lowest, [, model]) => {
+		if (!lowest) return model.quotaInfo;
+		const remaining = model.quotaInfo?.remainingFraction ?? 0;
+		return remaining < (lowest.remainingFraction ?? 0) ? model.quotaInfo : lowest;
 	}, undefined);
 }
 
 export function parseGoogleAntigravityUsage(
-	data: AntigravityQuotaSummary | undefined,
+	data: AntigravityModelsResponse | undefined,
 	modelId?: string,
 ): QuotaWindow[] {
-	const bucket = selectQuotaBucket(quotaBuckets(data), modelId);
-	if (!bucket) return [];
+	const quota = selectModelQuota(data?.models ?? {}, modelId);
+	if (!quota) return [];
 
-	const remainingFraction = Math.max(0, Math.min(1, Number(bucket.remainingFraction)));
+	const remainingFraction = Math.max(0, Math.min(1, quota.remainingFraction ?? 0));
 	const usedPercent = Math.round((1 - remainingFraction) * 100);
-	const resetsAt = parseDateish(bucket.resetTime);
+	const resetsAt = parseDateish(quota.resetTime);
 	const resetSeconds = Math.max(0, Math.round((resetsAt.getTime() - Date.now()) / 1000));
-	const isWeekly = bucket.window?.toLowerCase().includes("week") || resetSeconds > 36 * 60 * 60;
+	const isWeekly = resetSeconds > 36 * 60 * 60;
 
 	return [
 		{
@@ -95,27 +99,28 @@ export function parseGoogleAntigravityUsage(
 			windowSeconds: isWeekly ? 7 * 24 * 60 * 60 : 5 * 60 * 60,
 			usedValue: usedPercent,
 			limitValue: 100,
-			limited: remainingFraction <= 0,
+			limited: quota.isExhausted === true || remainingFraction <= 0,
 		},
 	];
 }
 
 export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<QuotasResult> {
-	const accessToken = await resolveAntigravityToken(auth);
-	if (!accessToken) return failure("No Google Antigravity OAuth token found", "config");
+	const credentials = await resolveAntigravityAuth(auth);
+	if (!credentials.token) return failure("No Google Antigravity OAuth token found", "config");
+	if (!credentials.projectId) return failure("No Google Antigravity project id found", "config");
 
-	const result = await fetchJson<AntigravityQuotaSummary>(
-		"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+	const result = await fetchJson<AntigravityModelsResponse>(
+		"https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
 		{
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${accessToken}`,
+				Authorization: `Bearer ${credentials.token}`,
 				"Content-Type": "application/json",
 				Accept: "application/json",
 				"Accept-Encoding": "identity",
 				"User-Agent": "antigravity",
 			},
-			body: "{}",
+			body: JSON.stringify({ project: credentials.projectId }),
 		},
 	);
 	if (!result.ok) return failure(result.message, result.kind);

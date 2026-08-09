@@ -298,7 +298,7 @@ test("google-antigravity: decodes provider API key and fetches usage endpoints",
 			ok: true,
 			status: 200,
 			json: async () => ({
-				groups: [{ buckets: [{ bucketId: "claude-sonnet-4-6", remainingFraction: 0.2 }] }],
+				models: { "claude-sonnet-4-6": { quotaInfo: { remainingFraction: 0.2 } } },
 			}),
 			text: async () => "",
 		});
@@ -314,8 +314,9 @@ test("google-antigravity: decodes provider API key and fetches usage endpoints",
 		assert.equal(result.success, true);
 		assert.equal(result.data.windows[0].usedPercent, 80);
 		assert.equal(requests.length, 1);
-		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
+		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
 		assert.equal(requests[0].init.headers.Authorization, "Bearer access-token");
+		assert.deepEqual(JSON.parse(requests[0].init.body), { project: "proj-123" });
 	} finally {
 		globalThis.fetch = originalFetch;
 	}

@@ -144,19 +144,15 @@ test("parseCodexUsage: credits skipped when has_credits false", () => {
 
 // ── Google Antigravity ─────────────────────────────────────────────────────
 
-test("parseGoogleAntigravityUsage: selects the active model quota", () => {
+test("parseGoogleAntigravityUsage: treats a future reset without remainingFraction as exhausted", () => {
 	const windows = parseGoogleAntigravityUsage(
 		{
-			groups: [
-				{
-					buckets: [
-						{ bucketId: "claude-sonnet-4-6", remainingFraction: 0, resetTime: "2099-01-01T00:00:00Z" },
-						{ bucketId: "gemini-3-flash", remainingFraction: 1, resetTime: "2099-01-01T00:00:00Z" },
-					],
-				},
-			],
+			models: {
+				"gemini-3.6-flash-medium": { quotaInfo: { resetTime: "2099-01-01T00:00:00Z" } },
+				"claude-sonnet-4-6": { quotaInfo: { remainingFraction: 1 } },
+			},
 		},
-		"claude-sonnet-4-6",
+		"gemini-3.6-flash",
 	);
 	assert.equal(windows.length, 1);
 	assert.equal(windows[0].provider, "google-antigravity");
@@ -168,14 +164,10 @@ test("parseGoogleAntigravityUsage: selects the active model quota", () => {
 
 test("parseGoogleAntigravityUsage: uses the lowest remaining quota when the model is unknown", () => {
 	const windows = parseGoogleAntigravityUsage({
-		groups: [
-			{
-				buckets: [
-					{ bucketId: "claude", remainingFraction: 0.8 },
-					{ bucketId: "gemini", remainingFraction: 0.2 },
-				],
-			},
-		],
+		models: {
+			claude: { quotaInfo: { remainingFraction: 0.8 } },
+			gemini: { quotaInfo: { remainingFraction: 0.2 } },
+		},
 	});
 	assert.equal(windows.length, 1);
 	assert.equal(windows[0].usedPercent, 80);
