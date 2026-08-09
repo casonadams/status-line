@@ -105,7 +105,10 @@ export function formatTopLine(ctx: ExtensionContext, footerData: ReadonlyFooterD
 	const sessionName = ctx.sessionManager.getSessionName();
 	if (sessionName) pwd = `${pwd} • ${sessionName}`;
 	const left = theme.fg("dim", pwd);
-	return truncateToWidth(left, width, theme.fg("dim", "..."));
+	const status = getTopRightStatus(footerData);
+	return status
+		? fitRightAligned(left, sanitizeStatusText(status.text), width)
+		: truncateToWidth(left, width, theme.fg("dim", "..."));
 }
 
 function buildUsageParts(totals: SessionUsageTotals, contextPercent: string, contextWindow: number): string[] {
@@ -132,11 +135,10 @@ export function formatStatsLine(ctx: ExtensionContext, footerData: ReadonlyFoote
 		"dim",
 		[parts.join(" "), optimizerStatus && sanitizeStatusText(optimizerStatus)].filter(Boolean).join(" "),
 	);
-	const quotaStatus = getTopRightStatus(footerData);
 	const modelId = ctx.model?.id || "no-model";
-	const rightParts = [quotaStatus && sanitizeStatusText(quotaStatus.text), modelId];
-	if (ctx.model?.reasoning) rightParts.push(getCurrentThinkingLevel(ctx));
-	const right = theme.fg("dim", rightParts.filter(Boolean).join(" • "));
+	const right = ctx.model?.reasoning
+		? theme.fg("dim", `${modelId} • ${getCurrentThinkingLevel(ctx)}`)
+		: theme.fg("dim", modelId);
 	return fitRightAligned(left, right, width);
 }
 
