@@ -38,7 +38,7 @@ async function resolveAntigravityToken(auth: QuotaAuth): Promise<string | undefi
 		const token = await providerAccessToken(auth, key);
 		if (token) return token;
 		const cred = auth.getCredential(key) as Record<string, unknown> | undefined;
-		const found = cred?.access_token ?? cred?.accessToken ?? cred?.token ?? cred?.apiKey;
+		const found = cred?.access ?? cred?.access_token ?? cred?.accessToken ?? cred?.token ?? cred?.apiKey;
 		if (typeof found === "string" && found) return found;
 	}
 	return undefined;
@@ -79,8 +79,7 @@ export function parseGoogleAntigravityUsage(
 		const usedPercent = Math.max(0, Math.min(100, Math.round((1 - remainingFraction) * 100)));
 		const resetsAt = parseDateish(quota.resetTime);
 		const isWeekly = resetsAt.getTime() - Date.now() > 36 * 60 * 60 * 1000;
-		const label =
-			i === 0 ? (isWeekly ? "7d" : "5h") : isWeekly ? "7d" : windows.some((w) => w.label === "5h") ? "7d" : "5h";
+		const label = i === 0 ? "5h" : windows.some((w) => w.label === "5h") ? "7d" : "5h";
 
 		windows.push({
 			provider: "google-antigravity",
@@ -119,6 +118,8 @@ export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<Quo
 	const headers = {
 		Authorization: `Bearer ${accessToken}`,
 		"Content-Type": "application/json",
+		Accept: "application/json",
+		"Accept-Encoding": "identity",
 		"User-Agent": "antigravity",
 	};
 
@@ -140,7 +141,16 @@ export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<Quo
 		return failure(loadResult?.message ?? "Failed to load Code Assist", loadResult?.kind ?? "network");
 
 	const companionProject = loadResult.data.cloudaicompanionProject;
-	const projectId = typeof companionProject === "string" ? companionProject : companionProject?.id;
+	let projectId = typeof companionProject === "string" ? companionProject : companionProject?.id;
+	if (!projectId) {
+		for (const key of ["google-antigravity", "antigravity", "google"]) {
+			const cred = auth.getCredential(key) as Record<string, unknown> | undefined;
+			if (typeof cred?.projectId === "string") {
+				projectId = cred.projectId;
+				break;
+			}
+		}
+	}
 
 	const modelsResult = await fetchJson<AntigravityFetchAvailableModelsResponse>(
 		`${baseUrlUsed}/v1internal:fetchAvailableModels`,
