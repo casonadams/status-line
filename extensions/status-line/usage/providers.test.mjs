@@ -158,8 +158,7 @@ test("parseGoogleAntigravityUsage: treats a future reset without remainingFracti
 	assert.equal(windows[0].provider, "google-antigravity");
 	assert.equal(windows[0].label, "7d");
 	assert.equal(windows[0].usedPercent, 100);
-	assert.equal(windows[0].limited, true);
-	assert.match(formatStatusLineQuotaStatus(windows), /^0% /);
+	assert.match(formatStatusLineQuotaStatus(windows), /^0% \d+d\d+h$/);
 });
 
 test("parseGoogleAntigravityUsage: uses the lowest remaining quota when the model is unknown", () => {

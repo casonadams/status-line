@@ -99,7 +99,6 @@ export function parseGoogleAntigravityUsage(
 			windowSeconds: isWeekly ? 7 * 24 * 60 * 60 : 5 * 60 * 60,
 			usedValue: usedPercent,
 			limitValue: 100,
-			limited: quota.isExhausted === true || remainingFraction <= 0,
 		},
 	];
 }
