@@ -9,8 +9,8 @@ function renderFooter(
 ): string[] {
 	const { width, showExtensionStatuses } = options;
 	const lines = [
-		formatTopLine(ctx, footerData, { width, showExtensionStatuses }),
-		formatStatsLine(ctx, footerData, width),
+		formatTopLine(ctx, footerData, { width }),
+		formatStatsLine(ctx, footerData, { width, showExtensionStatuses }),
 	];
 	const extensionStatuses = showExtensionStatuses ? formatExtensionStatuses(footerData, width) : undefined;
 	if (extensionStatuses) lines.push(extensionStatuses);

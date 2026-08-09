@@ -25,7 +25,7 @@ function context(cwd) {
 	};
 }
 
-test("formatTopLine indicates hidden extension statuses", () => {
+test("formatStatsLine indicates hidden extension statuses", () => {
 	const data = footerData(
 		new Map([
 			["status-line", "25% 4h30m"],
@@ -33,16 +33,22 @@ test("formatTopLine indicates hidden extension statuses", () => {
 		]),
 	);
 
-	assert.equal(formatTopLine(context("/work"), data, { width: 80 }).trimEnd().endsWith("25% 4h30m • +1"), true);
+	assert.equal(formatTopLine(context("/work"), data, { width: 80 }).trimEnd().endsWith("25% 4h30m"), true);
 	assert.equal(
-		formatTopLine(context("/work"), data, { width: 80, showExtensionStatuses: true }).trimEnd().endsWith("25% 4h30m"),
+		formatStatsLine(context("/work"), data, { width: 80 }).trimEnd().endsWith("test-model • medium • +1"),
+		true,
+	);
+	assert.equal(
+		formatStatsLine(context("/work"), data, { width: 80, showExtensionStatuses: true })
+			.trimEnd()
+			.endsWith("test-model • medium"),
 		true,
 	);
 	assert.equal(formatExtensionStatuses(data, 80), "MCP: 2 servers enabled");
 });
 
 test("formatStatsLine omits the provider", () => {
-	const line = formatStatsLine(context("/work"), footerData(), 80);
+	const line = formatStatsLine(context("/work"), footerData(), { width: 80 });
 	assert.equal(line.trimEnd().endsWith("test-model • medium"), true);
 	assert.equal(line.includes("test-provider"), false);
 });

@@ -22,10 +22,6 @@ class StatusLineExtension {
 			description: "Toggle extension statuses in the footer",
 			handler: async (_args, ctx) => this.toggleExtensionStatuses(ctx),
 		});
-		this.pi.registerShortcut("alt+s", {
-			description: "Toggle extension statuses in the footer",
-			handler: (ctx) => this.toggleExtensionStatuses(ctx),
-		});
 		this.pi.on("session_start", (_event, ctx) => void this.start(ctx));
 		this.pi.on("turn_end", (_event, ctx) => void this.refreshForContext(ctx));
 		this.pi.on("model_select", (_event, ctx) => void this.refreshForContext(ctx));

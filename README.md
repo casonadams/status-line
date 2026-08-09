@@ -19,7 +19,7 @@ The extension uses credentials already configured in pi. GitHub Copilot quota lo
 
 ## Extension statuses
 
-Extension statuses are hidden by default and summarized on the top line. Toggle the status line with `/status-line.statuses` or `Alt+S`.
+Extension statuses are hidden by default and summarized on the top line. Toggle the status line with `/status-line.statuses`.
 
 ## Development
 

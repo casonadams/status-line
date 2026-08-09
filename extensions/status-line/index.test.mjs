@@ -32,21 +32,16 @@ function makeExtensionApi(handlers) {
 	return {
 		on: (event, handler) => handlers.set(event, handler),
 		registerCommand: () => {},
-		registerShortcut: () => {},
 	};
 }
 
 test("status command toggles extension status visibility", () => {
 	const handlers = new Map();
 	let command;
-	let shortcut;
 	installStatusLine({
 		on: (event, handler) => handlers.set(event, handler),
 		registerCommand: (name, options) => {
 			if (name === "status-line.statuses") command = options;
-		},
-		registerShortcut: (key, options) => {
-			if (key === "alt+s") shortcut = options;
 		},
 	});
 	const notifications = [];
@@ -56,7 +51,7 @@ test("status command toggles extension status visibility", () => {
 	ctx.ui.setFooter = () => footerUpdates++;
 
 	command.handler("", ctx);
-	shortcut.handler(ctx);
+	command.handler("", ctx);
 
 	assert.equal(footerUpdates, 2);
 	assert.deepEqual(notifications, ["Extension statuses shown", "Extension statuses hidden"]);

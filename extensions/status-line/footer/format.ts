@@ -95,9 +95,9 @@ function abbreviateHome(cwd: string, home: string | undefined): string {
 export function formatTopLine(
 	ctx: ExtensionContext,
 	footerData: ReadonlyFooterDataProvider,
-	options: { width: number; showExtensionStatuses?: boolean },
+	options: { width: number },
 ): string {
-	const { width, showExtensionStatuses = false } = options;
+	const { width } = options;
 	const theme = ctx.ui.theme;
 	const home = process.env.HOME || process.env.USERPROFILE;
 	let pwd = abbreviateHome(ctx.sessionManager.getCwd(), home);
@@ -107,10 +107,9 @@ export function formatTopLine(
 	if (sessionName) pwd = `${pwd} • ${sessionName}`;
 	const left = theme.fg("dim", pwd);
 	const status = getTopRightStatus(footerData);
-	const hiddenCount = showExtensionStatuses ? 0 : getExtensionStatusTexts(footerData).length;
-	const hiddenIndicator = hiddenCount ? theme.fg("dim", `+${hiddenCount}`) : undefined;
-	const right = [status && sanitizeStatusText(status.text), hiddenIndicator].filter(Boolean).join(" • ");
-	return right ? fitRightAligned(left, right, width) : truncateToWidth(left, width, theme.fg("dim", "..."));
+	return status
+		? fitRightAligned(left, sanitizeStatusText(status.text), width)
+		: truncateToWidth(left, width, theme.fg("dim", "..."));
 }
 
 function buildUsageParts(totals: SessionUsageTotals, contextPercent: string, contextWindow: number): string[] {
@@ -124,7 +123,12 @@ function buildUsageParts(totals: SessionUsageTotals, contextPercent: string, con
 	return parts;
 }
 
-export function formatStatsLine(ctx: ExtensionContext, footerData: ReadonlyFooterDataProvider, width: number): string {
+export function formatStatsLine(
+	ctx: ExtensionContext,
+	footerData: ReadonlyFooterDataProvider,
+	options: { width: number; showExtensionStatuses?: boolean },
+): string {
+	const { width, showExtensionStatuses = false } = options;
 	const theme = ctx.ui.theme;
 	const totals = getSessionUsageTotals(ctx);
 	const contextUsage = ctx.getContextUsage();
@@ -139,7 +143,9 @@ export function formatStatsLine(ctx: ExtensionContext, footerData: ReadonlyFoote
 	);
 	const modelId = ctx.model?.id || "no-model";
 	const modelDetails = ctx.model?.reasoning ? `${modelId} • ${getCurrentThinkingLevel(ctx)}` : modelId;
-	return fitRightAligned(left, theme.fg("dim", modelDetails), width);
+	const hiddenCount = showExtensionStatuses ? 0 : getExtensionStatusTexts(footerData).length;
+	const right = hiddenCount ? `${modelDetails} • +${hiddenCount}` : modelDetails;
+	return fitRightAligned(left, theme.fg("dim", right), width);
 }
 
 function getExtensionStatusTexts(footerData: ReadonlyFooterDataProvider): string[] {
