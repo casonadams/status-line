@@ -22,7 +22,7 @@ class StatusLineExtension {
 			description: "Toggle extension statuses in the footer",
 			handler: async (_args, ctx) => this.toggleExtensionStatuses(ctx),
 		});
-		this.pi.registerShortcut("ctrl+shift+o", {
+		this.pi.registerShortcut("alt+s", {
 			description: "Toggle extension statuses in the footer",
 			handler: (ctx) => this.toggleExtensionStatuses(ctx),
 		});

@@ -46,7 +46,7 @@ test("status command toggles extension status visibility", () => {
 			if (name === "status-line.statuses") command = options;
 		},
 		registerShortcut: (key, options) => {
-			if (key === "ctrl+shift+o") shortcut = options;
+			if (key === "alt+s") shortcut = options;
 		},
 	});
 	const notifications = [];

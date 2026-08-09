@@ -33,10 +33,7 @@ test("formatTopLine indicates hidden extension statuses", () => {
 		]),
 	);
 
-	assert.equal(
-		formatTopLine(context("/work"), data, { width: 80 }).trimEnd().endsWith("25% 4h30m • +1 hidden status"),
-		true,
-	);
+	assert.equal(formatTopLine(context("/work"), data, { width: 80 }).trimEnd().endsWith("25% 4h30m • +1"), true);
 	assert.equal(
 		formatTopLine(context("/work"), data, { width: 80, showExtensionStatuses: true }).trimEnd().endsWith("25% 4h30m"),
 		true,

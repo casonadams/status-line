@@ -108,9 +108,7 @@ export function formatTopLine(
 	const left = theme.fg("dim", pwd);
 	const status = getTopRightStatus(footerData);
 	const hiddenCount = showExtensionStatuses ? 0 : getExtensionStatusTexts(footerData).length;
-	const hiddenIndicator = hiddenCount
-		? theme.fg("dim", `+${hiddenCount} hidden status${hiddenCount === 1 ? "" : "es"}`)
-		: undefined;
+	const hiddenIndicator = hiddenCount ? theme.fg("dim", `+${hiddenCount}`) : undefined;
 	const right = [status && sanitizeStatusText(status.text), hiddenIndicator].filter(Boolean).join(" • ");
 	return right ? fitRightAligned(left, right, width) : truncateToWidth(left, width, theme.fg("dim", "..."));
 }
