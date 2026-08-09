@@ -5,6 +5,7 @@ export const COPILOT_VERSION = "0.35.0";
 export const EDITOR_VERSION = "vscode/1.107.0";
 
 export interface QuotaAuth {
+	modelId?: string;
 	getApiKey(provider: string): Promise<string | undefined>;
 	getCredential(provider: string): unknown;
 }

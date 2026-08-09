@@ -31,6 +31,7 @@ class StatusLineExtension {
 		if (!isSupportedProvider(provider)) return undefined;
 
 		const auth: QuotaAuth = {
+			modelId: ctx.model?.id,
 			getApiKey: (providerId) => ctx.modelRegistry.getApiKeyForProvider(providerId),
 			getCredential: (providerId) => readStoredCredential(providerId),
 		};

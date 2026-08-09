@@ -1,30 +1,25 @@
-import {
-	type FetchJsonResult,
-	failure,
-	fetchJson,
-	parseDateish,
-	providerAccessToken,
-	type QuotaAuth,
-	safePercent,
-	success,
-} from "../helpers.ts";
+import { failure, fetchJson, parseDateish, providerAccessToken, type QuotaAuth, success } from "../helpers.ts";
 import type { QuotasResult, QuotaWindow } from "../types.ts";
 
-export type AntigravityModelInfo = {
-	displayName?: string;
-	model?: string;
-	quotaInfo?: { remainingFraction?: number; resetTime?: string; isExhausted?: boolean };
-};
-
-export interface AntigravityLoadCodeAssistResponse {
-	cloudaicompanionProject?: string | { id?: string };
-	planInfo?: { monthlyPromptCredits?: number };
-	availablePromptCredits?: number;
+interface AntigravityCredential {
+	access?: string;
+	access_token?: string;
+	accessToken?: string;
+	token?: string;
+	apiKey?: string;
 }
 
-export type AntigravityFetchAvailableModelsResponse = {
-	models?: Record<string, AntigravityModelInfo> | AntigravityModelInfo[];
-};
+interface AntigravityQuotaBucket {
+	bucketId?: string;
+	displayName?: string;
+	window?: string;
+	resetTime?: string;
+	remainingFraction?: number;
+}
+
+interface AntigravityQuotaSummary {
+	groups?: Array<{ buckets?: AntigravityQuotaBucket[] }>;
+}
 
 function tokenFromApiKey(apiKey: string | undefined): string | undefined {
 	if (!apiKey) return undefined;
@@ -40,126 +35,89 @@ async function resolveAntigravityToken(auth: QuotaAuth): Promise<string | undefi
 	for (const key of ["google-antigravity", "antigravity", "google"]) {
 		const token = tokenFromApiKey(await providerAccessToken(auth, key));
 		if (token) return token;
-		const cred = auth.getCredential(key) as Record<string, unknown> | undefined;
-		const found = cred?.access ?? cred?.access_token ?? cred?.accessToken ?? cred?.token ?? cred?.apiKey;
-		if (typeof found === "string" && found) return found;
+		const credential = auth.getCredential(key) as AntigravityCredential | undefined;
+		const stored =
+			credential?.access ??
+			credential?.access_token ??
+			credential?.accessToken ??
+			credential?.token ??
+			credential?.apiKey;
+		if (stored) return stored;
 	}
 	return undefined;
 }
 
-function extractModelEntries(
-	rawModels: AntigravityFetchAvailableModelsResponse["models"],
-): Array<[string, AntigravityModelInfo]> {
-	const modelEntries: Array<[string, AntigravityModelInfo]> = [];
-	if (Array.isArray(rawModels)) {
-		for (const m of rawModels) {
-			if (m && typeof m === "object") modelEntries.push([m.model || m.displayName || "unknown", m]);
-		}
-	} else if (rawModels && typeof rawModels === "object") {
-		for (const [id, m] of Object.entries(rawModels)) {
-			if (m && typeof m === "object") modelEntries.push([id, m]);
-		}
-	}
-	return modelEntries.filter(([id, m]) => {
-		if (!m.quotaInfo) return false;
-		if (id.startsWith("chat_") || id.startsWith("tab_") || id.startsWith("rev")) return false;
-		return !id.includes("image") && !id.includes("mquery") && !id.includes("lite");
-	});
+function quotaBuckets(data: AntigravityQuotaSummary | undefined): AntigravityQuotaBucket[] {
+	return (data?.groups ?? [])
+		.flatMap((group) => group.buckets ?? [])
+		.filter((bucket) => {
+			return typeof bucket.remainingFraction === "number" && Number.isFinite(bucket.remainingFraction);
+		});
+}
+
+function selectQuotaBucket(
+	buckets: readonly AntigravityQuotaBucket[],
+	modelId: string | undefined,
+): AntigravityQuotaBucket | undefined {
+	const normalizedModel = modelId?.toLowerCase();
+	const matching = normalizedModel
+		? buckets.filter((bucket) => {
+				const id = bucket.bucketId?.toLowerCase();
+				return id === normalizedModel || id?.startsWith(`${normalizedModel}-`) || normalizedModel.startsWith(`${id}-`);
+			})
+		: [];
+	const candidates = matching.length > 0 ? matching : buckets;
+	return candidates.reduce<AntigravityQuotaBucket | undefined>((lowest, bucket) => {
+		if (!lowest) return bucket;
+		return Number(bucket.remainingFraction) < Number(lowest.remainingFraction) ? bucket : lowest;
+	}, undefined);
 }
 
 export function parseGoogleAntigravityUsage(
-	codeAssistData?: AntigravityLoadCodeAssistResponse,
-	modelsData?: AntigravityFetchAvailableModelsResponse,
+	data: AntigravityQuotaSummary | undefined,
+	modelId?: string,
 ): QuotaWindow[] {
-	const windows: QuotaWindow[] = [],
-		validModels = extractModelEntries(modelsData?.models);
+	const bucket = selectQuotaBucket(quotaBuckets(data), modelId);
+	if (!bucket) return [];
 
-	for (let i = 0; i < validModels.length; i++) {
-		const [, m] = validModels[i];
-		const quota = m.quotaInfo;
-		if (!quota) continue;
-		const remainingFraction = Math.max(0, Math.min(1, quota.remainingFraction ?? 1));
-		const usedPercent = Math.max(0, Math.min(100, Math.round((1 - remainingFraction) * 100)));
-		const resetsAt = parseDateish(quota.resetTime);
-		const isWeekly = resetsAt.getTime() - Date.now() > 36 * 60 * 60 * 1000;
-		const label = i === 0 ? "5h" : windows.some((w) => w.label === "5h") ? "7d" : "5h";
+	const remainingFraction = Math.max(0, Math.min(1, Number(bucket.remainingFraction)));
+	const usedPercent = Math.round((1 - remainingFraction) * 100);
+	const resetsAt = parseDateish(bucket.resetTime);
+	const resetSeconds = Math.max(0, Math.round((resetsAt.getTime() - Date.now()) / 1000));
+	const isWeekly = bucket.window?.toLowerCase().includes("week") || resetSeconds > 36 * 60 * 60;
 
-		windows.push({
+	return [
+		{
 			provider: "google-antigravity",
-			label,
+			label: isWeekly ? "7d" : "5h",
 			usedPercent,
 			resetsAt,
 			windowSeconds: isWeekly ? 7 * 24 * 60 * 60 : 5 * 60 * 60,
 			usedValue: usedPercent,
 			limitValue: 100,
-			limited: Boolean(quota.isExhausted || remainingFraction <= 0),
-		});
-	}
-
-	const credits = codeAssistData?.availablePromptCredits,
-		monthly = codeAssistData?.planInfo?.monthlyPromptCredits;
-	if (monthly != null && monthly > 0 && credits != null) {
-		windows.push({
-			provider: "google-antigravity",
-			label: "Credits",
-			usedPercent: safePercent(Math.max(0, monthly - credits), monthly),
-			resetsAt: new Date(0),
-			windowSeconds: 0,
-			usedValue: credits,
-			limitValue: monthly,
-		});
-	}
-
-	return windows;
+			limited: remainingFraction <= 0,
+		},
+	];
 }
 
 export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<QuotasResult> {
 	const accessToken = await resolveAntigravityToken(auth);
 	if (!accessToken) return failure("No Google Antigravity OAuth token found", "config");
 
-	const baseUrls = ["https://cloudcode-pa.googleapis.com", "https://daily-cloudcode-pa.sandbox.googleapis.com"];
-	const headers = {
-		Authorization: `Bearer ${accessToken}`,
-		"Content-Type": "application/json",
-		Accept: "application/json",
-		"Accept-Encoding": "identity",
-		"User-Agent": "antigravity",
-	};
-
-	let loadResult: FetchJsonResult<AntigravityLoadCodeAssistResponse> | undefined;
-	let baseUrlUsed = baseUrls[0];
-	for (const baseUrl of baseUrls) {
-		baseUrlUsed = baseUrl;
-		loadResult = await fetchJson<AntigravityLoadCodeAssistResponse>(`${baseUrl}/v1internal:loadCodeAssist`, {
+	const result = await fetchJson<AntigravityQuotaSummary>(
+		"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+		{
 			method: "POST",
-			headers,
-			body: JSON.stringify({
-				metadata: { ideType: "ANTIGRAVITY", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
-			}),
-		});
-		if (loadResult.ok || loadResult.kind === "cancelled" || loadResult.kind === "timeout") break;
-	}
-
-	if (!loadResult?.ok)
-		return failure(loadResult?.message ?? "Failed to load Code Assist", loadResult?.kind ?? "network");
-
-	const companionProject = loadResult.data.cloudaicompanionProject;
-	let projectId = typeof companionProject === "string" ? companionProject : companionProject?.id;
-	if (!projectId) {
-		for (const key of ["google-antigravity", "antigravity", "google"]) {
-			const cred = auth.getCredential(key) as Record<string, unknown> | undefined;
-			if (typeof cred?.projectId === "string") {
-				projectId = cred.projectId;
-				break;
-			}
-		}
-	}
-
-	const modelsResult = await fetchJson<AntigravityFetchAvailableModelsResponse>(
-		`${baseUrlUsed}/v1internal:fetchAvailableModels`,
-		{ method: "POST", headers, body: JSON.stringify(projectId ? { project: projectId } : {}) },
+			headers: {
+				Authorization: `Bearer ${accessToken}`,
+				"Content-Type": "application/json",
+				Accept: "application/json",
+				"Accept-Encoding": "identity",
+				"User-Agent": "antigravity",
+			},
+			body: "{}",
+		},
 	);
-
-	if (!modelsResult.ok) return failure(modelsResult.message, modelsResult.kind);
-	return success("google-antigravity", parseGoogleAntigravityUsage(loadResult.data, modelsResult.data));
+	if (!result.ok) return failure(result.message, result.kind);
+	return success("google-antigravity", parseGoogleAntigravityUsage(result.data, auth.modelId));
 }
