@@ -144,7 +144,7 @@ export function formatStatsLine(
 	const modelId = ctx.model?.id || "no-model";
 	const modelDetails = ctx.model?.reasoning ? `${modelId} • ${getCurrentThinkingLevel(ctx)}` : modelId;
 	const hiddenCount = showExtensionStatuses ? 0 : getExtensionStatusTexts(footerData).length;
-	const right = hiddenCount ? `${modelDetails} • ${hiddenCount}` : modelDetails;
+	const right = hiddenCount ? `${hiddenCount} • ${modelDetails}` : modelDetails;
 	return fitRightAligned(left, theme.fg("dim", right), width);
 }
 
