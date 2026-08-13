@@ -4,11 +4,9 @@ import { test } from "node:test";
 import { formatQuotaCountdown, formatStatusLineQuotaStatus } from "./format.ts";
 
 const base = (overrides) => ({
-	provider: "anthropic",
 	label: "5h",
 	usedPercent: 50,
 	resetsAt: new Date(Date.now() + 5 * 60 * 60 * 1000),
-	windowSeconds: 5 * 60 * 60,
 	usedValue: 50,
 	limitValue: 100,
 	...overrides,
@@ -31,7 +29,6 @@ test("formatStatusLineQuotaStatus: unlimited window", () => {
 test("formatStatusLineQuotaStatus: credit balance", () => {
 	const text = formatStatusLineQuotaStatus([
 		base({
-			provider: "openai-codex",
 			label: "Credits",
 			usedValue: 12.34,
 			limitValue: 12.34,
@@ -60,7 +57,6 @@ test("formatStatusLineQuotaStatus: currency window", () => {
 test("formatStatusLineQuotaStatus: count window with non-100 limit", () => {
 	const text = formatStatusLineQuotaStatus([
 		base({
-			provider: "github-copilot",
 			label: "Chat / month",
 			usedValue: 30,
 			limitValue: 1000,
@@ -79,18 +75,8 @@ test("formatStatusLineQuotaStatus: appends '!' when limited", () => {
 test("formatStatusLineQuotaStatus: prefers 5h then 7d", () => {
 	const windows = [
 		base({ label: "Other", usedPercent: 10, resetsAt: new Date(0) }),
-		base({
-			label: "7d",
-			usedPercent: 60,
-			windowSeconds: 7 * 24 * 60 * 60,
-			resetsAt: new Date(0),
-		}),
-		base({
-			label: "5h",
-			usedPercent: 50,
-			windowSeconds: 5 * 60 * 60,
-			resetsAt: new Date(0),
-		}),
+		base({ label: "7d", usedPercent: 60, resetsAt: new Date(0) }),
+		base({ label: "5h", usedPercent: 50, resetsAt: new Date(0) }),
 	];
 	const text = formatStatusLineQuotaStatus(windows);
 	assert.match(text, /^50% 40%$/);

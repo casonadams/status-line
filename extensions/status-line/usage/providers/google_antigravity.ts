@@ -1,4 +1,4 @@
-import { failure, fetchJson, parseDateish, providerAccessToken, type QuotaAuth, success } from "../helpers.ts";
+import { failure, fetchJson, parseDateish, type QuotaAuth, success } from "../helpers.ts";
 import type { QuotasResult, QuotaWindow } from "../types.ts";
 
 interface AntigravityAuth {
@@ -43,7 +43,7 @@ function authFromApiKey(apiKey: string | undefined): Partial<AntigravityAuth> {
 async function resolveAntigravityAuth(auth: QuotaAuth): Promise<Partial<AntigravityAuth>> {
 	let resolved: Partial<AntigravityAuth> = {};
 	for (const key of ["google-antigravity", "antigravity", "google"]) {
-		resolved = { ...resolved, ...authFromApiKey(await providerAccessToken(auth, key)) };
+		resolved = { ...resolved, ...authFromApiKey(await auth.getApiKey(key)) };
 		const credential = auth.getCredential(key) as AntigravityCredential | undefined;
 		resolved.token ??=
 			credential?.access ??
@@ -92,11 +92,9 @@ export function parseGoogleAntigravityUsage(
 
 	return [
 		{
-			provider: "google-antigravity",
 			label: isWeekly ? "7d" : "5h",
 			usedPercent,
 			resetsAt,
-			windowSeconds: isWeekly ? 7 * 24 * 60 * 60 : 5 * 60 * 60,
 			usedValue: usedPercent,
 			limitValue: 100,
 		},

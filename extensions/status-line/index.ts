@@ -1,13 +1,12 @@
 import { type ExtensionAPI, type ExtensionContext, readStoredCredential } from "@earendil-works/pi-coding-agent";
 import { installStatusLineFooter } from "./footer.ts";
-import { createQuotaCache, fetchProviderQuotas, isSupportedProvider } from "./usage/fetch.ts";
+import { createQuotaCache, fetchProviderQuotas, normalizeProvider } from "./usage/fetch.ts";
 import { formatStatusLineQuotaStatus } from "./usage/format.ts";
 import type { QuotaAuth } from "./usage/helpers.ts";
 
 const EXTENSION_ID = "status-line";
 
 class StatusLineExtension {
-	private currentProvider: string | undefined;
 	private refreshGeneration = 0;
 	private showExtensionStatuses = false;
 	private readonly cache = createQuotaCache();
@@ -40,8 +39,6 @@ class StatusLineExtension {
 	}
 
 	private async resolveStatus(ctx: ExtensionContext, provider: string): Promise<string | undefined> {
-		if (!isSupportedProvider(provider)) return undefined;
-
 		const auth: QuotaAuth = {
 			modelId: ctx.model?.id,
 			getApiKey: (providerId) => ctx.modelRegistry.getApiKeyForProvider(providerId),
@@ -56,10 +53,14 @@ class StatusLineExtension {
 		this.setStatus(ctx, ctx.model ? `quota fetch failed (${provider})` : "no model", "warning");
 	}
 
-	private async refreshStatus(ctx: ExtensionContext, generation: number): Promise<void> {
+	private async refreshStatus(
+		ctx: ExtensionContext,
+		rawProvider: string | undefined,
+		generation: number,
+	): Promise<void> {
 		if (!ctx.hasUI) return;
-		const provider = this.currentProvider;
-		if (!isSupportedProvider(provider)) {
+		const provider = normalizeProvider(rawProvider);
+		if (!provider) {
 			this.setStatus(ctx, undefined);
 			return;
 		}
@@ -78,13 +79,11 @@ class StatusLineExtension {
 
 	private async refreshForContext(ctx: ExtensionContext): Promise<void> {
 		const generation = ++this.refreshGeneration;
-		this.currentProvider = ctx.model?.provider;
-		await this.refreshStatus(ctx, generation);
+		await this.refreshStatus(ctx, ctx.model?.provider, generation);
 	}
 
 	private stop(ctx: ExtensionContext): void {
 		this.refreshGeneration++;
-		this.currentProvider = undefined;
 		if (ctx.hasUI) {
 			ctx.ui.setFooter(undefined);
 			ctx.ui.setStatus(EXTENSION_ID, undefined);
@@ -93,11 +92,10 @@ class StatusLineExtension {
 
 	private async start(ctx: ExtensionContext): Promise<void> {
 		const generation = ++this.refreshGeneration;
-		this.currentProvider = ctx.model?.provider;
 		if (!ctx.hasUI) return;
 
 		installStatusLineFooter(ctx, () => this.showExtensionStatuses);
-		await this.refreshStatus(ctx, generation);
+		await this.refreshStatus(ctx, ctx.model?.provider, generation);
 	}
 }
 

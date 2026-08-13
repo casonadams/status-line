@@ -5,9 +5,7 @@ import {
 	type FetchJsonResult,
 	failure,
 	fetchJson,
-	monthWindowSeconds,
 	parseDateish,
-	providerAccessToken,
 	type QuotaAuth,
 	safePercent,
 	success,
@@ -74,7 +72,6 @@ function githubOAuthToken(auth: QuotaAuth): string | undefined {
 export function parseGitHubCopilotUsage(data: CopilotUsageResponse | undefined): QuotaWindow[] {
 	const windows: QuotaWindow[] = [];
 	const resetAt = parseDateish(data?.quota_reset_date ?? data?.quota_reset_date_utc ?? data?.limited_user_reset_date);
-	const periodSeconds = monthWindowSeconds(resetAt);
 	const snapshots = data?.quota_snapshots;
 	let hasUnlimitedQuota = false;
 	if (snapshots && typeof snapshots === "object") {
@@ -94,11 +91,9 @@ export function parseGitHubCopilotUsage(data: CopilotUsageResponse | undefined):
 			const remaining = Number(snap.remaining ?? snap.quota_remaining ?? 0);
 			if (entitlement <= 0) continue;
 			windows.push({
-				provider: "github-copilot",
 				label,
 				usedPercent: safePercent(entitlement - remaining, entitlement),
 				resetsAt: resetAt,
-				windowSeconds: periodSeconds,
 				usedValue: entitlement - remaining,
 				limitValue: entitlement,
 			});
@@ -106,11 +101,9 @@ export function parseGitHubCopilotUsage(data: CopilotUsageResponse | undefined):
 	}
 	if (windows.length === 0 && hasUnlimitedQuota) {
 		windows.push({
-			provider: "github-copilot",
 			label: "Unlimited",
 			usedPercent: 0,
 			resetsAt: new Date(0),
-			windowSeconds: 0,
 			usedValue: 0,
 			limitValue: 0,
 			unlimited: true,
@@ -135,7 +128,7 @@ export async function fetchGitHubCopilotQuotas(auth: QuotaAuth) {
 		}
 	}
 
-	const accessToken = await providerAccessToken(auth, "github-copilot");
+	const accessToken = await auth.getApiKey("github-copilot");
 	if (accessToken) {
 		const exchange = await fetchJson<{ token?: string }>("https://api.github.com/copilot_internal/v2/token", {
 			headers: copilotHeaders(`Bearer ${accessToken}`),

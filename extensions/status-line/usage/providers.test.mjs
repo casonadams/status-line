@@ -155,7 +155,6 @@ test("parseGoogleAntigravityUsage: treats a future reset without remainingFracti
 		"gemini-3.6-flash",
 	);
 	assert.equal(windows.length, 1);
-	assert.equal(windows[0].provider, "google-antigravity");
 	assert.equal(windows[0].label, "7d");
 	assert.equal(windows[0].usedPercent, 100);
 	assert.match(formatStatusLineQuotaStatus(windows), /^0% \d+d\d+h$/);

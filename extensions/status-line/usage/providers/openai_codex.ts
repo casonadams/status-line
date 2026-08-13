@@ -1,4 +1,4 @@
-import { failure, fetchJson, parseDateish, providerAccessToken, type QuotaAuth, success } from "../helpers.ts";
+import { failure, fetchJson, parseDateish, type QuotaAuth, success } from "../helpers.ts";
 import type { QuotaWindow } from "../types.ts";
 
 interface CodexCredential {
@@ -11,7 +11,6 @@ interface RateLimitWindow {
 	used_percent?: number;
 	reset_at?: string | number;
 	reset_time_ms?: number;
-	limit_window_seconds?: number;
 }
 
 interface RateLimitShape {
@@ -63,22 +62,18 @@ export function parseCodexUsage(data: CodexUsageResponse | undefined): QuotaWind
 
 	if (primary) {
 		windows.push({
-			provider: "openai-codex",
 			label: "5h",
 			usedPercent: percentLeftToUsedPercent(primary),
 			resetsAt: parseDateish(primary.reset_at ?? primary.reset_time_ms),
-			windowSeconds: Number(primary.limit_window_seconds ?? 5 * 60 * 60),
 			usedValue: percentLeftToUsedPercent(primary),
 			limitValue: 100,
 		});
 	}
 	if (secondary) {
 		windows.push({
-			provider: "openai-codex",
 			label: "7d",
 			usedPercent: percentLeftToUsedPercent(secondary),
 			resetsAt: parseDateish(secondary.reset_at ?? secondary.reset_time_ms),
-			windowSeconds: Number(secondary.limit_window_seconds ?? 7 * 24 * 60 * 60),
 			usedValue: percentLeftToUsedPercent(secondary),
 			limitValue: 100,
 		});
@@ -87,11 +82,9 @@ export function parseCodexUsage(data: CodexUsageResponse | undefined): QuotaWind
 	if (credits?.has_credits && credits.balance != null) {
 		const balance = Number(credits.balance);
 		windows.push({
-			provider: "openai-codex",
 			label: "Credits",
 			usedPercent: 0,
 			resetsAt: new Date(0),
-			windowSeconds: 0,
 			usedValue: balance,
 			limitValue: balance,
 			isCurrency: true,
@@ -101,7 +94,7 @@ export function parseCodexUsage(data: CodexUsageResponse | undefined): QuotaWind
 }
 
 export async function fetchCodexQuotas(auth: QuotaAuth) {
-	const accessToken = await providerAccessToken(auth, "openai-codex");
+	const accessToken = await auth.getApiKey("openai-codex");
 	const accountId = codexAccountId(auth);
 	if (!accessToken) return failure("No Codex access token found", "config");
 	if (!accountId) return failure("No Codex account id found", "config");

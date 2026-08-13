@@ -5,32 +5,22 @@ import { fetchGoogleAntigravityQuotas } from "./providers/google_antigravity.ts"
 import { fetchCodexQuotas } from "./providers/openai_codex.ts";
 import type { QuotasResult, SupportedQuotaProvider } from "./types.ts";
 
-export const SUPPORTED_PROVIDERS: SupportedQuotaProvider[] = [
-	"anthropic",
-	"openai-codex",
-	"github-copilot",
-	"google-antigravity",
-];
+const PROVIDER_ALIASES: Record<string, SupportedQuotaProvider> = {
+	anthropic: "anthropic",
+	codex: "openai-codex",
+	"openai-codex": "openai-codex",
+	copilot: "github-copilot",
+	"github-copilot": "github-copilot",
+	google: "google-antigravity",
+	antigravity: "google-antigravity",
+	"google-antigravity": "google-antigravity",
+};
 
 export function normalizeProvider(provider: string | undefined): SupportedQuotaProvider | undefined {
-	if (!provider) return undefined;
-	const lower = provider.toLowerCase();
-	if (lower === "google-antigravity" || lower === "antigravity" || lower === "google") {
-		return "google-antigravity";
-	}
-	if (lower === "openai-codex" || lower === "codex") {
-		return "openai-codex";
-	}
-	if (lower === "github-copilot" || lower === "copilot") {
-		return "github-copilot";
-	}
-	if (lower === "anthropic") {
-		return "anthropic";
-	}
-	return undefined;
+	return provider ? PROVIDER_ALIASES[provider.toLowerCase()] : undefined;
 }
 
-export function isSupportedProvider(provider: string | undefined): provider is SupportedQuotaProvider {
+export function isSupportedProvider(provider: string | undefined): boolean {
 	return normalizeProvider(provider) !== undefined;
 }
 

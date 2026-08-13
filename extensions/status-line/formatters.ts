@@ -12,8 +12,16 @@ export function fitRightAligned(left: string, right: string, width: number): str
 	return `${truncatedLeft}${" ".repeat(padding)}${safeRight}`;
 }
 
-export {
-	formatTokens,
-	formatUsageNumber,
-	sanitizeStatusText,
-} from "./numbers.ts";
+export function formatTokens(count: number): string {
+	if (count < 1_000) return `${count}`;
+	if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
+	if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
+	return `${Math.round(count / 1_000_000)}M`;
+}
+
+export function sanitizeStatusText(text: string): string {
+	return text
+		.replace(/[\r\n\t]/g, " ")
+		.replace(/ +/g, " ")
+		.trim();
+}

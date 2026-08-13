@@ -33,12 +33,6 @@ export function parseDateish(value: unknown): Date {
 	return new Date(0);
 }
 
-export function monthWindowSeconds(resetAt: Date): number {
-	const approxStart = new Date(resetAt);
-	approxStart.setMonth(approxStart.getMonth() - 1);
-	return Math.max(1, Math.round((resetAt.getTime() - approxStart.getTime()) / 1000));
-}
-
 export async function fetchJson<T = unknown>(
 	url: string,
 	init: RequestInit,
@@ -80,8 +74,4 @@ export function failure(message: string, kind: "cancelled" | "timeout" | "config
 
 export function success(provider: SupportedQuotaProvider, windows: QuotaWindow[]): QuotasResult {
 	return { success: true, data: { provider, windows } };
-}
-
-export function providerAccessToken(auth: QuotaAuth, provider: string): Promise<string | undefined> {
-	return auth.getApiKey(provider);
 }
