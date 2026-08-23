@@ -53,6 +53,13 @@ test("formatStatsLine omits the provider", () => {
 	assert.equal(line.includes("test-provider"), false);
 });
 
+test("formatStatsLine includes tokens per second when available", () => {
+	const line = formatStatsLine(context("/work"), footerData(), { width: 80, tokensPerSecond: 25.67 });
+	assert.equal(line.includes("@25.7t/s"), true);
+	const omitted = formatStatsLine(context("/work"), footerData(), { width: 80 });
+	assert.equal(omitted.includes("t/s"), false);
+});
+
 test("formatTopLine abbreviates only true descendants of the home directory", () => {
 	const originalHome = process.env.HOME;
 	process.env.HOME = "/Users/alice";

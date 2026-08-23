@@ -112,7 +112,11 @@ export function formatTopLine(
 		: truncateToWidth(left, width, theme.fg("dim", "..."));
 }
 
-function buildUsageParts(totals: SessionUsageTotals, contextPercent: string, contextWindow: number): string[] {
+function buildUsageParts(
+	totals: SessionUsageTotals,
+	display: { contextPercent: string; contextWindow: number; tokensPerSecond?: number },
+): string[] {
+	const { contextPercent, contextWindow, tokensPerSecond } = display;
 	const parts: string[] = [];
 	if (totals.totalInput) parts.push(`↑${formatTokens(totals.totalInput)}`);
 	if (totals.totalOutput) parts.push(`↓${formatTokens(totals.totalOutput)}`);
@@ -120,21 +124,22 @@ function buildUsageParts(totals: SessionUsageTotals, contextPercent: string, con
 	if (totals.totalCacheWrite) parts.push(`W${formatTokens(totals.totalCacheWrite)}`);
 	if (totals.totalCost || totals.usingSubscription) parts.push(`$${totals.totalCost.toFixed(3)}`);
 	parts.push(`${contextPercent}/${formatTokens(contextWindow)}`);
+	if (tokensPerSecond != null) parts.push(`@${tokensPerSecond.toFixed(1)}t/s`);
 	return parts;
 }
 
 export function formatStatsLine(
 	ctx: ExtensionContext,
 	footerData: ReadonlyFooterDataProvider,
-	options: { width: number; showExtensionStatuses?: boolean },
+	options: { width: number; showExtensionStatuses?: boolean; tokensPerSecond?: number },
 ): string {
-	const { width, showExtensionStatuses = false } = options;
+	const { width, showExtensionStatuses = false, tokensPerSecond } = options;
 	const theme = ctx.ui.theme;
 	const totals = getSessionUsageTotals(ctx);
 	const contextUsage = ctx.getContextUsage();
 	const contextWindow = contextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
 	const contextPercent = contextUsage?.percent == null ? "?" : `${contextUsage.percent.toFixed(1)}%`;
-	const parts = buildUsageParts(totals, contextPercent, contextWindow);
+	const parts = buildUsageParts(totals, { contextPercent, contextWindow, tokensPerSecond });
 
 	const optimizerStatus = getOptimizerStatus(footerData);
 	const left = theme.fg(

@@ -3,12 +3,14 @@ import { installStatusLineFooter } from "./footer.ts";
 import { createQuotaCache, fetchProviderQuotas, normalizeProvider } from "./usage/fetch.ts";
 import { formatStatusLineQuotaStatus } from "./usage/format.ts";
 import type { QuotaAuth } from "./usage/helpers.ts";
+import { SpeedTracker } from "./usage/speed.ts";
 
 const EXTENSION_ID = "status-line";
 
 class StatusLineExtension {
 	private refreshGeneration = 0;
 	private showExtensionStatuses = false;
+	private readonly speed = new SpeedTracker();
 	private readonly cache = createQuotaCache();
 	private readonly pi: ExtensionAPI;
 
@@ -25,6 +27,11 @@ class StatusLineExtension {
 		this.pi.on("turn_end", (_event, ctx) => void this.refreshForContext(ctx));
 		this.pi.on("model_select", (_event, ctx) => void this.refreshForContext(ctx));
 		this.pi.on("session_shutdown", (_event, ctx) => this.stop(ctx));
+		this.pi.on("turn_start", (event) => this.speed.turnStart(event.turnIndex));
+		this.pi.on("turn_end", (event) => {
+			if (event.message.role !== "assistant") return;
+			this.speed.turnEnd(event.turnIndex, event.message.usage?.output);
+		});
 	}
 
 	private setStatus(ctx: ExtensionContext, status?: string, color: "dim" | "warning" = "dim"): void {
@@ -34,8 +41,15 @@ class StatusLineExtension {
 	private toggleExtensionStatuses(ctx: ExtensionContext): void {
 		if (!ctx.hasUI) return;
 		this.showExtensionStatuses = !this.showExtensionStatuses;
-		installStatusLineFooter(ctx, () => this.showExtensionStatuses);
+		this.installFooter(ctx);
 		ctx.ui.notify(`Extension statuses ${this.showExtensionStatuses ? "shown" : "hidden"}`, "info");
+	}
+
+	private installFooter(ctx: ExtensionContext): void {
+		installStatusLineFooter(ctx, {
+			showExtensionStatuses: () => this.showExtensionStatuses,
+			getTokensPerSecond: () => this.speed.getTokensPerSecond(),
+		});
 	}
 
 	private async resolveStatus(ctx: ExtensionContext, provider: string): Promise<string | undefined> {
@@ -84,6 +98,7 @@ class StatusLineExtension {
 
 	private stop(ctx: ExtensionContext): void {
 		this.refreshGeneration++;
+		this.speed.reset();
 		if (ctx.hasUI) {
 			ctx.ui.setFooter(undefined);
 			ctx.ui.setStatus(EXTENSION_ID, undefined);
@@ -94,7 +109,8 @@ class StatusLineExtension {
 		const generation = ++this.refreshGeneration;
 		if (!ctx.hasUI) return;
 
-		installStatusLineFooter(ctx, () => this.showExtensionStatuses);
+		this.speed.reset();
+		this.installFooter(ctx);
 		await this.refreshStatus(ctx, ctx.model?.provider, generation);
 	}
 }

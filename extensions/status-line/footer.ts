@@ -5,12 +5,12 @@ import { formatExtensionStatuses, formatStatsLine, formatTopLine } from "./foote
 function renderFooter(
 	ctx: ExtensionContext,
 	footerData: ReadonlyFooterDataProvider,
-	options: { width: number; showExtensionStatuses: boolean },
+	options: { width: number; showExtensionStatuses: boolean; tokensPerSecond?: number },
 ): string[] {
-	const { width, showExtensionStatuses } = options;
+	const { width, showExtensionStatuses, tokensPerSecond } = options;
 	const lines = [
 		formatTopLine(ctx, footerData, { width }),
-		formatStatsLine(ctx, footerData, { width, showExtensionStatuses }),
+		formatStatsLine(ctx, footerData, { width, showExtensionStatuses, tokensPerSecond }),
 	];
 	const extensionStatuses = showExtensionStatuses ? formatExtensionStatuses(footerData, width) : undefined;
 	if (extensionStatuses) lines.push(extensionStatuses);
@@ -20,22 +20,30 @@ function renderFooter(
 function createFooterComponent(
 	ctx: ExtensionContext,
 	footerData: ReadonlyFooterDataProvider,
-	showExtensionStatuses: () => boolean,
+	options: { showExtensionStatuses: () => boolean; getTokensPerSecond: () => number | undefined },
 ): Component {
+	const { showExtensionStatuses, getTokensPerSecond } = options;
 	return {
 		invalidate() {},
 		render(width: number): string[] {
-			return renderFooter(ctx, footerData, { width, showExtensionStatuses: showExtensionStatuses() });
+			return renderFooter(ctx, footerData, {
+				width,
+				showExtensionStatuses: showExtensionStatuses(),
+				tokensPerSecond: getTokensPerSecond(),
+			});
 		},
 	};
 }
 
 export function installStatusLineFooter(
 	ctx: ExtensionContext,
-	showExtensionStatuses: () => boolean = () => false,
+	options: { showExtensionStatuses: () => boolean; getTokensPerSecond: () => number | undefined } = {
+		showExtensionStatuses: () => false,
+		getTokensPerSecond: () => undefined,
+	},
 ): void {
 	ctx.ui.setFooter((tui, _theme, footerData) => {
-		const component = createFooterComponent(ctx, footerData, showExtensionStatuses);
+		const component = createFooterComponent(ctx, footerData, options);
 		const dispose = footerData.onBranchChange(() => tui.requestRender());
 		return { ...component, dispose };
 	});

@@ -6,6 +6,7 @@ Status Line is a pi extension package that replaces the default footer with a co
 
 - Current directory, Git branch, and session name
 - Session token usage, cost, context usage, model, and thinking level
+- Average output generation speed (tokens/second)
 - Remaining provider quota and reset time for Anthropic, Google Antigravity, OpenAI Codex, and GitHub Copilot
 - Collapsible status messages published by other extensions
 
