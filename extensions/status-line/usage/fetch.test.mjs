@@ -26,8 +26,6 @@ function makeCache() {
 	};
 }
 
-// ── isSupportedProvider ─────────────────────────────────────────────────────
-
 test("isSupportedProvider: known providers", () => {
 	assert.equal(isSupportedProvider("anthropic"), true);
 	assert.equal(isSupportedProvider("openai-codex"), true);
@@ -39,8 +37,6 @@ test("isSupportedProvider: unknown and undefined are false", () => {
 	assert.equal(isSupportedProvider("ollama"), false);
 	assert.equal(isSupportedProvider(undefined), false);
 });
-
-// ── fetchProviderQuotas cache ───────────────────────────────────────────────
 
 test("cache: first call hits the network, second call within TTL returns cached result", async () => {
 	let calls = 0;
@@ -138,13 +134,13 @@ test("cache: failures use Fibonacci-minute backoff", async () => {
 	};
 	const cache = makeCache();
 	try {
-		await fetchProviderQuotas(auth, "anthropic", cache); // retry in 1m
+		await fetchProviderQuotas(auth, "anthropic", cache);
 		now += 60_000;
-		await fetchProviderQuotas(auth, "anthropic", cache); // retry in 1m
+		await fetchProviderQuotas(auth, "anthropic", cache);
 		now += 60_000;
-		await fetchProviderQuotas(auth, "anthropic", cache); // retry in 2m
+		await fetchProviderQuotas(auth, "anthropic", cache);
 		now += 60_000;
-		await fetchProviderQuotas(auth, "anthropic", cache); // still backed off
+		await fetchProviderQuotas(auth, "anthropic", cache);
 		assert.equal(attempts, 3);
 		now += 60_000;
 		await fetchProviderQuotas(auth, "anthropic", cache);
@@ -153,8 +149,6 @@ test("cache: failures use Fibonacci-minute backoff", async () => {
 		Date.now = originalNow;
 	}
 });
-
-// ── provider fetchers ─────────────────────────────────────────────────────
 
 test("anthropic: hits the oauth/usage endpoint with bearer + beta header", async () => {
 	const originalFetch = globalThis.fetch;

@@ -117,7 +117,7 @@ async function tryWithToken(token: string, scheme: "Bearer" | "token"): Promise<
 	return usage.ok ? success("github-copilot", parseGitHubCopilotUsage(usage.data)) : failure(usage.message, usage.kind);
 }
 
-export async function fetchGitHubCopilotQuotas(auth: QuotaAuth) {
+export async function fetchGitHubCopilotQuotas(auth: QuotaAuth): Promise<QuotasResult> {
 	let lastFailure: QuotasResult | undefined;
 	const githubToken = githubOAuthToken(auth);
 	if (githubToken) {

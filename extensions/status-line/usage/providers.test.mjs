@@ -7,8 +7,6 @@ import { parseGitHubCopilotUsage } from "./providers/github_copilot.ts";
 import { parseGoogleAntigravityUsage } from "./providers/google_antigravity.ts";
 import { parseCodexUsage } from "./providers/openai_codex.ts";
 
-// ── Anthropic ──────────────────────────────────────────────────────────────
-
 test("parseAnthropicUsage: 5h and 7d windows", () => {
 	const windows = parseAnthropicUsage({
 		five_hour: { utilization: 12, resets_at: "2026-01-01T00:00:00Z" },
@@ -42,8 +40,6 @@ test("parseAnthropicUsage: extra usage skipped when disabled", () => {
 	});
 	assert.equal(windows.length, 0);
 });
-
-// ── GitHub Copilot ─────────────────────────────────────────────────────────
 
 test("parseGitHubCopilotUsage: maps each snapshot key", () => {
 	const windows = parseGitHubCopilotUsage({
@@ -90,8 +86,6 @@ test("parseGitHubCopilotUsage: falls back to quota_remaining field", () => {
 	assert.equal(windows[0].usedValue, 10);
 	assert.equal(windows[0].usedPercent, 10);
 });
-
-// ── OpenAI Codex ───────────────────────────────────────────────────────────
 
 test("parseCodexUsage: percent_left is inverted to used", () => {
 	const windows = parseCodexUsage({
@@ -141,8 +135,6 @@ test("parseCodexUsage: credits skipped when has_credits false", () => {
 	});
 	assert.equal(windows.length, 0);
 });
-
-// ── Google Antigravity ─────────────────────────────────────────────────────
 
 test("parseGoogleAntigravityUsage: treats a future reset without remainingFraction as exhausted", () => {
 	const windows = parseGoogleAntigravityUsage(

@@ -1,4 +1,3 @@
-/** Tracks output-token generation speed from assistant message streaming. */
 export class SpeedTracker {
 	private readonly now: () => number;
 	private startedAt: number | undefined;
@@ -22,7 +21,6 @@ export class SpeedTracker {
 		this.totalElapsedMs += Math.max(0, this.now() - start);
 	}
 
-	/** Average output tokens per second across tracked turns. */
 	getTokensPerSecond(): number | undefined {
 		if (this.totalOutputTokens <= 0 || this.totalElapsedMs <= 0) return undefined;
 		return (this.totalOutputTokens / this.totalElapsedMs) * 1000;

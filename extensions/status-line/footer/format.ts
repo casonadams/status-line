@@ -14,6 +14,14 @@ type SessionUsageTotals = {
 	usingSubscription: boolean;
 };
 
+type UsageEntry = {
+	input?: number;
+	output?: number;
+	cacheRead?: number;
+	cacheWrite?: number;
+	cost?: { total?: number };
+};
+
 type SelectedStatus = { key: string; text: string };
 
 function getStatus(statuses: ReadonlyMap<string, string | undefined>, ...keys: string[]): SelectedStatus | undefined {
@@ -41,15 +49,7 @@ function getSessionUsageTotals(ctx: ExtensionContext): SessionUsageTotals {
 
 	for (const entry of ctx.sessionManager.getEntries()) {
 		if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-		const usage = entry.message.usage as
-			| {
-					input?: number;
-					output?: number;
-					cacheRead?: number;
-					cacheWrite?: number;
-					cost?: { total?: number };
-			  }
-			| undefined;
+		const usage = entry.message.usage as UsageEntry | undefined;
 		totalInput += typeof usage?.input === "number" ? usage.input : 0;
 		totalOutput += typeof usage?.output === "number" ? usage.output : 0;
 		totalCacheRead += typeof usage?.cacheRead === "number" ? usage.cacheRead : 0;
@@ -68,16 +68,14 @@ function getSessionUsageTotals(ctx: ExtensionContext): SessionUsageTotals {
 }
 
 function getCurrentThinkingLevel(ctx: ExtensionContext): string {
-	interface ThinkingLevelChangeEntry {
-		thinkingLevel?: string;
-	}
-
 	const entries = ctx.sessionManager.getEntries();
 	for (let i = entries.length - 1; i >= 0; i--) {
 		const entry = entries[i];
-		if (entry.type === "thinking_level_change") {
-			const level = (entry as ThinkingLevelChangeEntry).thinkingLevel;
-			if (typeof level === "string") return level;
+		if (
+			entry.type === "thinking_level_change" &&
+			typeof (entry as { thinkingLevel?: string }).thinkingLevel === "string"
+		) {
+			return (entry as { thinkingLevel: string }).thinkingLevel;
 		}
 	}
 	return "off";
@@ -156,8 +154,11 @@ export function formatStatsLine(
 function getExtensionStatusTexts(footerData: ReadonlyFooterDataProvider): string[] {
 	const selected = getTopRightStatus(footerData);
 	return Array.from(footerData.getExtensionStatuses().entries())
-		.filter(([key, text]) => text && !INLINE_STATUS_KEYS.has(key) && key !== selected?.key)
-		.map(([, text]) => sanitizeStatusText(text as string));
+		.filter(
+			(entry): entry is [string, string] =>
+				Boolean(entry[1]) && !INLINE_STATUS_KEYS.has(entry[0]) && entry[0] !== selected?.key,
+		)
+		.map(([, text]) => sanitizeStatusText(text));
 }
 
 export function formatExtensionStatuses(footerData: ReadonlyFooterDataProvider, width: number): string | undefined {

@@ -1,5 +1,5 @@
 import { failure, fetchJson, parseDateish, type QuotaAuth, success } from "../helpers.ts";
-import type { QuotaWindow } from "../types.ts";
+import type { QuotasResult, QuotaWindow } from "../types.ts";
 
 interface CodexCredential {
 	accountId?: string;
@@ -93,7 +93,7 @@ export function parseCodexUsage(data: CodexUsageResponse | undefined): QuotaWind
 	return windows;
 }
 
-export async function fetchCodexQuotas(auth: QuotaAuth) {
+export async function fetchCodexQuotas(auth: QuotaAuth): Promise<QuotasResult> {
 	const accessToken = await auth.getApiKey("openai-codex");
 	const accountId = codexAccountId(auth);
 	if (!accessToken) return failure("No Codex access token found", "config");

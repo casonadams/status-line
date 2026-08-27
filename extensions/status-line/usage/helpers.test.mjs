@@ -3,8 +3,6 @@ import { test } from "node:test";
 
 import { fetchJson, parseDateish, safePercent } from "./helpers.ts";
 
-// ── safePercent ────────────────────────────────────────────────────────────
-
 test("safePercent: 0/0 returns 0", () => {
 	assert.equal(safePercent(0, 0), 0);
 });
@@ -31,8 +29,6 @@ test("safePercent: normal fraction", () => {
 	assert.ok(safePercent(1, 3) > 0 && safePercent(1, 3) <= 100);
 });
 
-// ── parseDateish ───────────────────────────────────────────────────────────
-
 test("parseDateish: number below 10^11 is treated as seconds", () => {
 	const d = parseDateish(1_000_000);
 	assert.equal(d.getTime(), 1_000_000_000);
@@ -51,8 +47,6 @@ test("parseDateish: ISO string", () => {
 test("parseDateish: undefined returns epoch 0", () => {
 	assert.equal(parseDateish(undefined).getTime(), 0);
 });
-
-// ── fetchJson ────────────────────────────────────────────────────────────
 
 test("fetchJson: 200 with valid JSON returns ok", async () => {
 	const originalFetch = globalThis.fetch;

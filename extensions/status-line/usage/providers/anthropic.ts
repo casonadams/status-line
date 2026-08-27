@@ -1,5 +1,5 @@
 import { failure, fetchJson, parseDateish, type QuotaAuth, safePercent, success } from "../helpers.ts";
-import type { QuotaWindow } from "../types.ts";
+import type { QuotasResult, QuotaWindow } from "../types.ts";
 
 interface AnthropicWindow {
 	utilization?: number;
@@ -55,7 +55,7 @@ export function parseAnthropicUsage(data: AnthropicUsageResponse | undefined): Q
 	return windows;
 }
 
-export async function fetchAnthropicQuotas(auth: QuotaAuth) {
+export async function fetchAnthropicQuotas(auth: QuotaAuth): Promise<QuotasResult> {
 	const accessToken = await auth.getApiKey("anthropic");
 	if (!accessToken) return failure("No Anthropic OAuth token found", "config");
 	const result = await fetchJson<AnthropicUsageResponse>("https://api.anthropic.com/api/oauth/usage", {
