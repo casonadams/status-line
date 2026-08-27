@@ -27,10 +27,12 @@ class StatusLineExtension {
 		this.pi.on("turn_end", (_event, ctx) => void this.refreshForContext(ctx));
 		this.pi.on("model_select", (_event, ctx) => void this.refreshForContext(ctx));
 		this.pi.on("session_shutdown", (_event, ctx) => this.stop(ctx));
-		this.pi.on("turn_start", (event) => this.speed.turnStart(event.turnIndex));
-		this.pi.on("turn_end", (event) => {
+		this.pi.on("message_start", (event) => {
+			if (event.message.role === "assistant") this.speed.responseStart();
+		});
+		this.pi.on("message_end", (event) => {
 			if (event.message.role !== "assistant") return;
-			this.speed.turnEnd(event.turnIndex, event.message.usage?.output);
+			this.speed.responseEnd(event.message.usage?.output);
 		});
 	}
 

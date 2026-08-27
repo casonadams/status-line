@@ -1,11 +1,7 @@
-/**
- * Tracks output-token generation speed from turn lifecycle events.
- * Only generation time (turn start -> turn end) counts; idle time between
- * turns is excluded so the average reflects real streaming throughput.
- */
+/** Tracks output-token generation speed from assistant message streaming. */
 export class SpeedTracker {
 	private readonly now: () => number;
-	private readonly starts = new Map<number, number>();
+	private startedAt: number | undefined;
 	private totalOutputTokens = 0;
 	private totalElapsedMs = 0;
 
@@ -13,13 +9,13 @@ export class SpeedTracker {
 		this.now = now;
 	}
 
-	turnStart(turnIndex: number): void {
-		this.starts.set(turnIndex, this.now());
+	responseStart(): void {
+		this.startedAt = this.now();
 	}
 
-	turnEnd(turnIndex: number, outputTokens?: number): void {
-		const start = this.starts.get(turnIndex);
-		this.starts.delete(turnIndex);
+	responseEnd(outputTokens?: number): void {
+		const start = this.startedAt;
+		this.startedAt = undefined;
 		const tokens = typeof outputTokens === "number" ? outputTokens : 0;
 		if (start == null || tokens <= 0) return;
 		this.totalOutputTokens += tokens;
@@ -33,7 +29,7 @@ export class SpeedTracker {
 	}
 
 	reset(): void {
-		this.starts.clear();
+		this.startedAt = undefined;
 		this.totalOutputTokens = 0;
 		this.totalElapsedMs = 0;
 	}
