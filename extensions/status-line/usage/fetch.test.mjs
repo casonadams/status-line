@@ -36,6 +36,8 @@ test("isSupportedProvider: known providers", () => {
 
 test("isSupportedProvider: unknown and undefined are false", () => {
 	assert.equal(isSupportedProvider("ollama"), false);
+	assert.equal(isSupportedProvider("ollama", "llama3:8b"), false);
+	assert.equal(isSupportedProvider("ollama", "glm-5.3-flash:cloud"), true);
 	assert.equal(isSupportedProvider(undefined), false);
 });
 

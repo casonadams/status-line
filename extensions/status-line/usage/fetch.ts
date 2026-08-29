@@ -27,8 +27,8 @@ export function normalizeProvider(provider: string | undefined, modelId?: string
 	return PROVIDER_ALIASES[lower];
 }
 
-export function isSupportedProvider(provider: string | undefined): boolean {
-	return normalizeProvider(provider) !== undefined;
+export function isSupportedProvider(provider: string | undefined, modelId?: string): boolean {
+	return normalizeProvider(provider, modelId) !== undefined;
 }
 
 const PROVIDER_TTLS_MS: Record<SupportedQuotaProvider, number> = {
