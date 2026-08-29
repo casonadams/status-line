@@ -11,11 +11,11 @@ interface OllamaUsageResponse {
 const OLLAMA_USAGE_URL = "https://ollama.com/api/usage";
 const OLLAMA_API_KEY_ENV = "OLLAMA_API_KEY";
 
-/** Extract the key from an auth.json credential entry ({"type": "api_key", "key": ...}). */
+/** Extract the key from an auth.json credential entry (a non-empty string "key" field). */
 function credentialApiKey(credential: unknown): string | undefined {
 	if (credential == null || typeof credential !== "object" || Array.isArray(credential)) return undefined;
-	const entry = credential as { type?: unknown; key?: unknown };
-	if (entry.type !== "api_key" || typeof entry.key !== "string" || entry.key.length === 0) return undefined;
+	const entry = credential as { key?: unknown };
+	if (typeof entry.key !== "string" || entry.key.length === 0) return undefined;
 	return entry.key;
 }
 
@@ -44,7 +44,9 @@ function quotaWindow(label: string, fraction: number): QuotaWindow {
 export async function fetchOllamaCloudQuotas(auth: QuotaAuth): Promise<QuotasResult> {
 	const apiKey =
 		(await auth.getApiKey("ollama-cloud")) ??
+		(await auth.getApiKey("ollama")) ??
 		credentialApiKey(auth.getCredential("ollama-cloud")) ??
+		credentialApiKey(auth.getCredential("ollama")) ??
 		process.env[OLLAMA_API_KEY_ENV];
 	if (!apiKey) return failure("No Ollama Cloud API key found", "config");
 	const result = await fetchJson<OllamaUsageResponse>(OLLAMA_USAGE_URL, {

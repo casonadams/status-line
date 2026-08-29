@@ -19,7 +19,7 @@ pi install git:git@github.com:casonadams/status-line.git
 
 The extension uses credentials already configured in pi. GitHub Copilot quota lookup can also fall back to the token from `gh auth token`.
 
-For local `ollama` setups (`ollama launch pi`), the local server does not proxy Ollama Cloud usage. Add your Ollama Cloud API key to `~/.pi/agent/auth.json` under `"ollama-cloud"` (`{"type": "api_key", "key": "..."}`), or launch pi with `OLLAMA_API_KEY` set. Non-cloud local models show no quota.
+For local `ollama` setups (`ollama launch pi`), the local server does not proxy Ollama Cloud usage. Add your Ollama Cloud API key to `~/.pi/agent/auth.json` under either `"ollama"` or `"ollama-cloud"` (`{"type": "api_key", "key": "..."}` - both provider ids are accepted), or launch pi with `OLLAMA_API_KEY` set. Non-cloud local models show no quota.
 
 If the [`pi-ollama-cloud`](https://github.com/fgrehm/pi-ollama-cloud) extension is installed, keep its own opt-in usage bar (`/ollama-usage-status`) off so Ollama Cloud usage is not rendered twice on two surfaces.
 

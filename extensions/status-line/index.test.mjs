@@ -1,8 +1,22 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { setImmediate } from "node:timers";
 
 import installStatusLine from "./index.ts";
+
+function stubEmptyAgentDir() {
+	const original = process.env.PI_CODING_AGENT_DIR;
+	const dir = mkdtempSync(join(tmpdir(), "status-line-test-agent-"));
+	process.env.PI_CODING_AGENT_DIR = dir;
+	return () => {
+		rmSync(dir, { recursive: true, force: true });
+		if (original === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = original;
+	};
+}
 
 function deferred() {
 	let resolve;
@@ -166,6 +180,7 @@ test("ollama-cloud without any key degrades to the warning status without HTTP c
 		throw new Error("must not fetch without a key");
 	};
 	const statuses = [];
+	const restoreAgentDir = stubEmptyAgentDir();
 	try {
 		const context = makeContext("ollama-cloud", statuses);
 		context.modelRegistry.getApiKeyForProvider = async () => undefined;
@@ -174,6 +189,7 @@ test("ollama-cloud without any key degrades to the warning status without HTTP c
 		assert.equal(statuses.at(-1), "quota fetch failed (ollama-cloud)");
 		assert.equal(fetchCalls, 0);
 	} finally {
+		restoreAgentDir();
 		globalThis.fetch = originalFetch;
 		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
 		else process.env.OLLAMA_API_KEY = originalEnv;
@@ -239,6 +255,7 @@ test("local ollama cloud model without any key shows the warning status without 
 		throw new Error("must not fetch without a key");
 	};
 	const statuses = [];
+	const restoreAgentDir = stubEmptyAgentDir();
 	try {
 		const context = makeContext("ollama", statuses);
 		context.model.id = "glm-5.3-flash:cloud";
@@ -248,6 +265,7 @@ test("local ollama cloud model without any key shows the warning status without 
 		assert.equal(statuses.at(-1), "quota fetch failed (ollama-cloud)");
 		assert.equal(fetchCalls, 0);
 	} finally {
+		restoreAgentDir();
 		globalThis.fetch = originalFetch;
 		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
 		else process.env.OLLAMA_API_KEY = originalEnv;

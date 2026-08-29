@@ -87,13 +87,14 @@ provider switching - behaves exactly like the existing four providers.
   https://ollama.com/api/usage` with an `Authorization: Bearer <key>` header,
   through the existing `fetchJson` helper (15s timeout, existing error-kind
   classification).
-- REQ-003: The API key resolves through a chain: (1)
-  `auth.getApiKey("ollama-cloud")` - pi's model registry, which covers
-  auth.json credentials and `$OLLAMA_API_KEY` expansion when the
-  `pi-ollama-cloud` extension is installed; (2) the stored
-  `"ollama-cloud"` auth.json credential (shape `{"type": "api_key",
-  "key": ...}`, read without that extension installed); (3) the
-  `OLLAMA_API_KEY` environment variable. With no key resolved, no HTTP
+- REQ-003: The API key resolves through a chain, accepting the credential
+  under either provider id (`ollama-cloud` when the `pi-ollama-cloud`
+  extension is installed, `ollama` for local launches): (1) registry lookup
+  via `auth.getApiKey("ollama-cloud")`, (2) registry via
+  `auth.getApiKey("ollama")`, (3) the stored auth.json `"ollama-cloud"`
+  credential, (4) the stored `"ollama"` credential, (5) the
+  `OLLAMA_API_KEY` environment variable. A credential is used when it is an
+  object with a non-empty string `key` field. With no key resolved, no HTTP
   request is made and the fetch fails with kind `config`.
 - REQ-004: A response is accepted only if `limits.session.usage` and
   `limits.weekly.usage` are finite numbers. All other fields (per-model
