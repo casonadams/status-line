@@ -18,10 +18,15 @@ function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.length > 0;
 }
 
-function credentialField(credential: unknown, field: "key" | "static_key"): string | undefined {
+function credentialField(credential: unknown, field: string): string | undefined {
 	if (credential == null || typeof credential !== "object" || Array.isArray(credential)) return undefined;
 	const value = (credential as Record<string, unknown>)[field];
 	return isNonEmptyString(value) ? value : undefined;
+}
+
+// Canonical spelling is static_key; the hyphenated form is tolerated.
+function pinnedCredentialKey(credential: unknown): string | undefined {
+	return credentialField(credential, "static_key") ?? credentialField(credential, "static-key");
 }
 
 export function parseOllamaUsage(data: unknown): QuotaWindow[] {
@@ -49,7 +54,7 @@ function quotaWindow(label: string, fraction: number): QuotaWindow {
 // (registry keys and the entry's own `key` field, which ollama/pi may rewrite).
 async function resolveOllamaApiKey(auth: QuotaAuth): Promise<string | undefined> {
 	for (const id of OLLAMA_PROVIDER_IDS) {
-		const pinned = credentialField(auth.getCredential(id), "static_key");
+		const pinned = pinnedCredentialKey(auth.getCredential(id));
 		if (pinned) return pinned;
 	}
 	for (const id of OLLAMA_PROVIDER_IDS) {

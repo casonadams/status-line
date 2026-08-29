@@ -629,6 +629,32 @@ test("ollama: a pinned static_key beats the tool-managed registry and entry key"
 	}
 });
 
+test("ollama: accepts the hyphenated static-key spelling", async () => {
+	const originalFetch = globalThis.fetch;
+	let captured;
+	globalThis.fetch = async (url, init) => {
+		captured = { url, init };
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } }),
+			text: async () => "",
+		});
+	};
+	try {
+		const auth = {
+			modelId: "glm-5.3-flash:cloud",
+			getApiKey: async () => "device-key",
+			getCredential: () => ({ type: "api_key", "static-key": "hyphen-pinned-key" }),
+		};
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, true);
+		assert.equal(captured.init.headers.Authorization, "Bearer hyphen-pinned-key");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
 test("fetchProviderQuotas: raw local ollama with a cloud model shares the ollama-cloud cache plane", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalEnv = process.env.OLLAMA_API_KEY;

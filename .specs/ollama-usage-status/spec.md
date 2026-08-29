@@ -93,7 +93,8 @@ provider switching - behaves exactly like the existing four providers.
   `static_key` field on either stored auth.json credential, (2) registry
   lookups via `auth.getApiKey("ollama-cloud"|"ollama")`, (3) the stored
   credentials' `key` fields, (4) the `OLLAMA_API_KEY` environment variable.
-  A credential field is used when it is a non-empty string. `static_key`
+  A credential field is used when it is a non-empty string; the pinned field
+  is `static_key`, with the hyphenated `static-key` spelling tolerated. `static_key`
   exists because integration tooling (ollama launch / pi) may rewrite the
   entry's `key`; the pinned value must survive that. With no key resolved,
   no HTTP request is made and the fetch fails with kind `config`.
