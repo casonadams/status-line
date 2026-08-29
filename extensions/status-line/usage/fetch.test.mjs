@@ -5,6 +5,7 @@ import { fetchProviderQuotas, isSupportedProvider } from "./fetch.ts";
 import { fetchAnthropicQuotas } from "./providers/anthropic.ts";
 import { fetchGitHubCopilotQuotas } from "./providers/github_copilot.ts";
 import { fetchGoogleAntigravityQuotas } from "./providers/google_antigravity.ts";
+import { fetchOllamaCloudQuotas } from "./providers/ollama_cloud.ts";
 import { fetchCodexQuotas } from "./providers/openai_codex.ts";
 
 function makeAuth(overrides = {}) {
@@ -313,5 +314,200 @@ test("google-antigravity: decodes provider API key and fetches usage endpoints",
 		assert.deepEqual(JSON.parse(requests[0].init.body), { project: "proj-123" });
 	} finally {
 		globalThis.fetch = originalFetch;
+	}
+});
+
+test("isSupportedProvider: ollama-cloud is supported in any casing", () => {
+	assert.equal(isSupportedProvider("ollama-cloud"), true);
+	assert.equal(isSupportedProvider("OLLAMA-Cloud"), true);
+});
+
+test("ollama-cloud: hits the api/usage endpoint with bearer auth", async () => {
+	const originalFetch = globalThis.fetch;
+	let captured;
+	globalThis.fetch = async (url, init) => {
+		captured = { url, init };
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } }),
+			text: async () => "",
+		});
+	};
+	try {
+		const auth = makeAuth({ tokenProvider: "ollama-cloud" });
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, true);
+		assert.equal(captured.url, "https://ollama.com/api/usage");
+		assert.equal(captured.init.headers.Authorization, "Bearer token");
+		assert.equal(result.data.provider, "ollama-cloud");
+		assert.deepEqual(
+			result.data.windows.map((w) => [w.label, w.usedPercent]),
+			[
+				["5h", 34],
+				["7d", 45],
+			],
+		);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("ollama-cloud: no key returns config failure without any HTTP call", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalEnv = process.env.OLLAMA_API_KEY;
+	delete process.env.OLLAMA_API_KEY;
+	let calls = 0;
+	globalThis.fetch = async () => {
+		calls++;
+		throw new Error("must not fetch without a key");
+	};
+	try {
+		const auth = makeAuth();
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, false);
+		assert.equal(result.error.kind, "config");
+		assert.equal(calls, 0);
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
+		else process.env.OLLAMA_API_KEY = originalEnv;
+	}
+});
+
+test("ollama-cloud: falls back to OLLAMA_API_KEY when the registry misses", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalEnv = process.env.OLLAMA_API_KEY;
+	let captured;
+	globalThis.fetch = async (url, init) => {
+		captured = { url, init };
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } }),
+			text: async () => "",
+		});
+	};
+	process.env.OLLAMA_API_KEY = "env-fallback-key";
+	try {
+		const auth = makeAuth();
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, true);
+		assert.equal(captured.init.headers.Authorization, "Bearer env-fallback-key");
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
+		else process.env.OLLAMA_API_KEY = originalEnv;
+	}
+});
+
+test("ollama-cloud: unexpected response shape returns an http failure", async () => {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () =>
+		/** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 } } }),
+			text: async () => "",
+		});
+	try {
+		const auth = makeAuth({ tokenProvider: "ollama-cloud" });
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, false);
+		assert.equal(result.error.kind, "http");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("ollama-cloud: malformed JSON body keeps the network classification", async () => {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () =>
+		/** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => {
+				throw new Error("malformed body");
+			},
+			text: async () => "",
+		});
+	try {
+		const auth = makeAuth({ tokenProvider: "ollama-cloud" });
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, false);
+		assert.equal(result.error.kind, "network");
+		assert.equal(result.error.message, "malformed body");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("ollama-cloud: non-ok status preserves the http kind and message", async () => {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () =>
+		/** @type {Response} */ ({
+			ok: false,
+			status: 401,
+			statusText: "Unauthorized",
+			json: async () => ({}),
+			text: async () => "Unauthorized",
+		});
+	try {
+		const auth = makeAuth({ tokenProvider: "ollama-cloud" });
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, false);
+		assert.equal(result.error.kind, "http");
+		assert.equal(result.error.message, "Unauthorized");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("cache: ollama-cloud within the 5-minute TTL returns the cached result", async () => {
+	let calls = 0;
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () => {
+		calls++;
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } }),
+			text: async () => "",
+		});
+	};
+	try {
+		const auth = makeAuth({ tokenProvider: "ollama-cloud" });
+		const cache = makeCache();
+		const first = await fetchProviderQuotas(auth, "ollama-cloud", cache);
+		assert.equal(first.success, true);
+		const second = await fetchProviderQuotas(auth, "ollama-cloud", cache);
+		assert.equal(second.success, true);
+		assert.equal(calls, 1);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("cache: ollama-cloud config failure is cached with zero further HTTP calls", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalEnv = process.env.OLLAMA_API_KEY;
+	delete process.env.OLLAMA_API_KEY;
+	let calls = 0;
+	globalThis.fetch = async () => {
+		calls++;
+		throw new Error("must not fetch without a key");
+	};
+	try {
+		const auth = makeAuth();
+		const cache = makeCache();
+		const first = await fetchProviderQuotas(auth, "ollama-cloud", cache);
+		assert.equal(first.success, false);
+		const second = await fetchProviderQuotas(auth, "ollama-cloud", cache);
+		assert.equal(second.success, false);
+		assert.equal(calls, 0);
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
+		else process.env.OLLAMA_API_KEY = originalEnv;
 	}
 });

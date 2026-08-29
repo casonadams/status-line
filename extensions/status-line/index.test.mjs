@@ -106,3 +106,96 @@ test("a completed refresh cannot restore status after switching to an unsupporte
 		globalThis.fetch = originalFetch;
 	}
 });
+
+test("ollama-cloud model renders remaining session and weekly percentages", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	let fetchCalls = 0;
+	globalThis.fetch = async () => {
+		fetchCalls++;
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } }),
+			text: async () => "",
+		});
+	};
+	const statuses = [];
+	try {
+		handlers.get("session_start")({}, makeContext("ollama-cloud", statuses));
+		handlers.get("turn_end")({}, makeContext("ollama-cloud", statuses));
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "66% 55%");
+		assert.equal(fetchCalls, 1);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("ollama-cloud model at cap renders the limited marker", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () =>
+		/** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 1.0 }, weekly: { usage: 1.0 } } }),
+			text: async () => "",
+		});
+	const statuses = [];
+	try {
+		handlers.get("turn_end")({}, makeContext("ollama-cloud", statuses));
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "0% ! 0% !");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("ollama-cloud without any key degrades to the warning status without HTTP calls", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	const originalEnv = process.env.OLLAMA_API_KEY;
+	delete process.env.OLLAMA_API_KEY;
+	let fetchCalls = 0;
+	globalThis.fetch = async () => {
+		fetchCalls++;
+		throw new Error("must not fetch without a key");
+	};
+	const statuses = [];
+	try {
+		const context = makeContext("ollama-cloud", statuses);
+		context.modelRegistry.getApiKeyForProvider = async () => undefined;
+		handlers.get("turn_end")({}, context);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "quota fetch failed (ollama-cloud)");
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
+		else process.env.OLLAMA_API_KEY = originalEnv;
+	}
+});
+
+test("unsupported local ollama provider never fetches or sets a status", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	let fetchCalls = 0;
+	globalThis.fetch = async () => {
+		fetchCalls++;
+		throw new Error("must not fetch for an unsupported provider");
+	};
+	const statuses = [];
+	try {
+		handlers.get("model_select")({}, makeContext("ollama", statuses));
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), undefined);
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});

@@ -41,7 +41,7 @@ function formatQuotaWindowValue(window: QuotaWindow): string {
 
 export function formatQuotaCountdown(window: QuotaWindow): string | undefined {
 	const resetAt = window.resetsAt?.getTime?.();
-	if (!Number.isFinite(resetAt) || resetAt <= 0) return undefined;
+	if (resetAt === undefined || !Number.isFinite(resetAt) || resetAt <= 0) return undefined;
 
 	const totalSeconds = Math.max(0, Math.round((resetAt - Date.now()) / 1000));
 	const days = Math.floor(totalSeconds / 86_400);

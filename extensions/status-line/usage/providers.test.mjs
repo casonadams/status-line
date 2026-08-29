@@ -5,6 +5,7 @@ import { formatStatusLineQuotaStatus } from "./format.ts";
 import { parseAnthropicUsage } from "./providers/anthropic.ts";
 import { parseGitHubCopilotUsage } from "./providers/github_copilot.ts";
 import { parseGoogleAntigravityUsage } from "./providers/google_antigravity.ts";
+import { parseOllamaUsage } from "./providers/ollama_cloud.ts";
 import { parseCodexUsage } from "./providers/openai_codex.ts";
 
 test("parseAnthropicUsage: 5h and 7d windows", () => {
@@ -161,4 +162,66 @@ test("parseGoogleAntigravityUsage: uses the lowest remaining quota when the mode
 	});
 	assert.equal(windows.length, 1);
 	assert.equal(windows[0].usedPercent, 80);
+});
+
+test("parseOllamaUsage: session and weekly windows in preferred order", () => {
+	const windows = parseOllamaUsage({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } });
+	assert.equal(windows.length, 2);
+	assert.equal(windows[0].label, "5h");
+	assert.equal(windows[0].usedPercent, 34);
+	assert.equal(windows[0].usedValue, 34);
+	assert.equal(windows[0].limitValue, 100);
+	assert.equal(windows[1].label, "7d");
+	assert.equal(windows[1].usedPercent, 45);
+	assert.equal(windows[1].resetsAt, undefined);
+});
+
+test("parseOllamaUsage: ignores per-model counts, activity, and unknown fields", () => {
+	const windows = parseOllamaUsage({
+		limits: {
+			session: { usage: 0.34, models: [{ name: "gpt-oss:120b", request_count: 12 }] },
+			weekly: { usage: 0.45, models: [] },
+		},
+		activity: { cost: "1.23", period: { type: "four_weeks", starting_at: "2026-01-01T00:00:00Z" } },
+		unknown: { nested: true },
+	});
+	assert.equal(windows.length, 2);
+	assert.equal(windows[0].usedPercent, 34);
+	assert.equal(windows[1].usedPercent, 45);
+});
+
+test("parseOllamaUsage: clamps over-cap usage to 100 with the limited marker", () => {
+	const windows = parseOllamaUsage({ limits: { session: { usage: 1.7 }, weekly: { usage: 1.7 } } });
+	assert.equal(windows[0].usedPercent, 100);
+	assert.equal(windows[0].limited, true);
+	assert.equal(windows[1].usedPercent, 100);
+	assert.equal(windows[1].limited, true);
+});
+
+test("parseOllamaUsage: usage exactly 1.0 marks the window limited", () => {
+	const windows = parseOllamaUsage({ limits: { session: { usage: 1.0 }, weekly: { usage: 0.5 } } });
+	assert.equal(windows[0].usedPercent, 100);
+	assert.equal(windows[0].limited, true);
+	assert.equal(windows[1].usedPercent, 50);
+	assert.equal(windows[1].limited, false);
+});
+
+test("parseOllamaUsage: zero usage renders zero percent without limited", () => {
+	const windows = parseOllamaUsage({ limits: { session: { usage: 0 }, weekly: { usage: 0 } } });
+	assert.deepEqual(
+		windows.map((w) => [w.usedPercent, w.limited ?? false]),
+		[
+			[0, false],
+			[0, false],
+		],
+	);
+});
+
+test("parseOllamaUsage: missing or non-finite usage fields are rejected", () => {
+	assert.deepEqual(parseOllamaUsage({}), []);
+	assert.deepEqual(parseOllamaUsage({ limits: { session: {} } }), []);
+	assert.deepEqual(parseOllamaUsage({ limits: { session: { usage: 0.2 }, weekly: {} } }), []);
+	assert.deepEqual(parseOllamaUsage({ limits: { session: { usage: "0.2" }, weekly: { usage: 0.4 } } }), []);
+	assert.deepEqual(parseOllamaUsage({ limits: { session: { usage: Number.NaN }, weekly: { usage: 0.4 } } }), []);
+	assert.deepEqual(parseOllamaUsage(null), []);
 });
