@@ -89,13 +89,14 @@ provider switching - behaves exactly like the existing four providers.
   classification).
 - REQ-003: The API key resolves through a chain, accepting the credential
   under either provider id (`ollama-cloud` when the `pi-ollama-cloud`
-  extension is installed, `ollama` for local launches): (1) registry lookup
-  via `auth.getApiKey("ollama-cloud")`, (2) registry via
-  `auth.getApiKey("ollama")`, (3) the stored auth.json `"ollama-cloud"`
-  credential, (4) the stored `"ollama"` credential, (5) the
-  `OLLAMA_API_KEY` environment variable. A credential is used when it is an
-  object with a non-empty string `key` field. With no key resolved, no HTTP
-  request is made and the fetch fails with kind `config`.
+  extension is installed, `ollama` for local launches): (1) a user-pinned
+  `static_key` field on either stored auth.json credential, (2) registry
+  lookups via `auth.getApiKey("ollama-cloud"|"ollama")`, (3) the stored
+  credentials' `key` fields, (4) the `OLLAMA_API_KEY` environment variable.
+  A credential field is used when it is a non-empty string. `static_key`
+  exists because integration tooling (ollama launch / pi) may rewrite the
+  entry's `key`; the pinned value must survive that. With no key resolved,
+  no HTTP request is made and the fetch fails with kind `config`.
 - REQ-004: A response is accepted only if `limits.session.usage` and
   `limits.weekly.usage` are finite numbers. All other fields (per-model
   request counts, activity cost, period metadata) are ignored; their shape

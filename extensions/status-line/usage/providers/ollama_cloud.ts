@@ -10,13 +10,18 @@ interface OllamaUsageResponse {
 
 const OLLAMA_USAGE_URL = "https://ollama.com/api/usage";
 const OLLAMA_API_KEY_ENV = "OLLAMA_API_KEY";
+// The credential may live under either provider id: ollama-cloud (the
+// pi-ollama-cloud provider) or ollama (pi's local provider id).
+const OLLAMA_PROVIDER_IDS = ["ollama-cloud", "ollama"] as const;
 
-/** Extract the key from an auth.json credential entry (a non-empty string "key" field). */
-function credentialApiKey(credential: unknown): string | undefined {
+function isNonEmptyString(value: unknown): value is string {
+	return typeof value === "string" && value.length > 0;
+}
+
+function credentialField(credential: unknown, field: "key" | "static_key"): string | undefined {
 	if (credential == null || typeof credential !== "object" || Array.isArray(credential)) return undefined;
-	const entry = credential as { key?: unknown };
-	if (typeof entry.key !== "string" || entry.key.length === 0) return undefined;
-	return entry.key;
+	const value = (credential as Record<string, unknown>)[field];
+	return isNonEmptyString(value) ? value : undefined;
 }
 
 export function parseOllamaUsage(data: unknown): QuotaWindow[] {
@@ -40,14 +45,27 @@ function quotaWindow(label: string, fraction: number): QuotaWindow {
 	return { label, usedPercent, usedValue: usedPercent, limitValue: 100, limited: fraction >= 1 };
 }
 
+// static_key is a user-pinned override: it beats every tool-managed source
+// (registry keys and the entry's own `key` field, which ollama/pi may rewrite).
+async function resolveOllamaApiKey(auth: QuotaAuth): Promise<string | undefined> {
+	for (const id of OLLAMA_PROVIDER_IDS) {
+		const pinned = credentialField(auth.getCredential(id), "static_key");
+		if (pinned) return pinned;
+	}
+	for (const id of OLLAMA_PROVIDER_IDS) {
+		const registryKey = await auth.getApiKey(id);
+		if (registryKey) return registryKey;
+	}
+	for (const id of OLLAMA_PROVIDER_IDS) {
+		const stored = credentialField(auth.getCredential(id), "key");
+		if (stored) return stored;
+	}
+	return process.env[OLLAMA_API_KEY_ENV];
+}
+
 // The /api/usage endpoint is undocumented and may change or disappear without notice.
 export async function fetchOllamaCloudQuotas(auth: QuotaAuth): Promise<QuotasResult> {
-	const apiKey =
-		(await auth.getApiKey("ollama-cloud")) ??
-		(await auth.getApiKey("ollama")) ??
-		credentialApiKey(auth.getCredential("ollama-cloud")) ??
-		credentialApiKey(auth.getCredential("ollama")) ??
-		process.env[OLLAMA_API_KEY_ENV];
+	const apiKey = await resolveOllamaApiKey(auth);
 	if (!apiKey) return failure("No Ollama Cloud API key found", "config");
 	const result = await fetchJson<OllamaUsageResponse>(OLLAMA_USAGE_URL, {
 		method: "GET",
