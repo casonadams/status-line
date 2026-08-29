@@ -10,6 +10,7 @@ interface OllamaUsageResponse {
 
 const OLLAMA_USAGE_URL = "https://ollama.com/api/usage";
 const OLLAMA_API_KEY_ENV = "OLLAMA_API_KEY";
+
 function credentialApiKey(credential: unknown): string | undefined {
 	if (credential == null || typeof credential !== "object" || Array.isArray(credential)) return undefined;
 	const key = (credential as Record<string, unknown>).key;
