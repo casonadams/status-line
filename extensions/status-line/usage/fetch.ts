@@ -18,8 +18,13 @@ const PROVIDER_ALIASES: Record<string, SupportedQuotaProvider> = {
 	"ollama-cloud": "ollama-cloud",
 };
 
-export function normalizeProvider(provider: string | undefined): SupportedQuotaProvider | undefined {
-	return provider ? PROVIDER_ALIASES[provider.toLowerCase()] : undefined;
+export function normalizeProvider(provider: string | undefined, modelId?: string): SupportedQuotaProvider | undefined {
+	if (!provider) return undefined;
+	const lower = provider.toLowerCase();
+	// Local `ollama` (ollama launch pi) shares the Ollama Cloud quota plane,
+	// but only cloud models (`:cloud` id suffix) consume it.
+	if (lower === "ollama") return modelId?.endsWith(":cloud") ? "ollama-cloud" : undefined;
+	return PROVIDER_ALIASES[lower];
 }
 
 export function isSupportedProvider(provider: string | undefined): boolean {
@@ -78,7 +83,7 @@ export async function fetchProviderQuotas(
 	rawProvider: string,
 	cache: QuotaCache,
 ): Promise<QuotasResult> {
-	const provider = normalizeProvider(rawProvider);
+	const provider = normalizeProvider(rawProvider, auth.modelId);
 	if (!provider) {
 		return { success: false, error: { message: `Unsupported provider: ${rawProvider}`, kind: "config" } };
 	}

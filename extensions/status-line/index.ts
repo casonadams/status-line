@@ -75,7 +75,7 @@ class StatusLineExtension {
 		generation: number,
 	): Promise<void> {
 		if (!ctx.hasUI) return;
-		const provider = normalizeProvider(rawProvider);
+		const provider = normalizeProvider(rawProvider, ctx.model?.id);
 		if (!provider) {
 			this.setStatus(ctx, undefined);
 			return;

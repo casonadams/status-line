@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { fetchProviderQuotas, isSupportedProvider } from "./fetch.ts";
+import { fetchProviderQuotas, isSupportedProvider, normalizeProvider } from "./fetch.ts";
 import { fetchAnthropicQuotas } from "./providers/anthropic.ts";
 import { fetchGitHubCopilotQuotas } from "./providers/github_copilot.ts";
 import { fetchGoogleAntigravityQuotas } from "./providers/google_antigravity.ts";
@@ -509,5 +509,99 @@ test("cache: ollama-cloud config failure is cached with zero further HTTP calls"
 		globalThis.fetch = originalFetch;
 		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
 		else process.env.OLLAMA_API_KEY = originalEnv;
+	}
+});
+
+test("normalizeProvider: local ollama resolves only for cloud models", () => {
+	assert.equal(normalizeProvider("ollama", "glm-5.3-flash:cloud"), "ollama-cloud");
+	assert.equal(normalizeProvider("OLLAMA", "glm-5.3-flash:cloud"), "ollama-cloud");
+	assert.equal(normalizeProvider("ollama", "llama3:8b"), undefined);
+	assert.equal(normalizeProvider("ollama", undefined), undefined);
+	assert.equal(normalizeProvider("ollama-cloud", undefined), "ollama-cloud");
+	assert.equal(normalizeProvider("ollama-cloud", "glm-5.3-flash"), "ollama-cloud");
+});
+
+test("ollama: fetches with the auth.json ollama-cloud credential when the registry misses", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalEnv = process.env.OLLAMA_API_KEY;
+	delete process.env.OLLAMA_API_KEY;
+	let captured;
+	globalThis.fetch = async (url, init) => {
+		captured = { url, init };
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } }),
+			text: async () => "",
+		});
+	};
+	try {
+		const auth = {
+			modelId: "glm-5.3-flash:cloud",
+			getApiKey: async () => undefined,
+			getCredential: (id) => (id === "ollama-cloud" ? { type: "api_key", key: "cred-key" } : undefined),
+		};
+		const result = await fetchOllamaCloudQuotas(auth);
+		assert.equal(result.success, true);
+		assert.equal(captured.init.headers.Authorization, "Bearer cred-key");
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
+		else process.env.OLLAMA_API_KEY = originalEnv;
+	}
+});
+
+test("fetchProviderQuotas: raw local ollama with a cloud model shares the ollama-cloud cache plane", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalEnv = process.env.OLLAMA_API_KEY;
+	let calls = 0;
+	globalThis.fetch = async () => {
+		calls++;
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } }),
+			text: async () => "",
+		});
+	};
+	try {
+		const auth = {
+			modelId: "glm-5.3-flash:cloud",
+			getApiKey: async () => undefined,
+			getCredential: () => undefined,
+		};
+		process.env.OLLAMA_API_KEY = "env-fallback-key";
+		const cache = makeCache();
+		const first = await fetchProviderQuotas(auth, "ollama", cache);
+		assert.equal(first.success, true);
+		const second = await fetchProviderQuotas(auth, "ollama", cache);
+		assert.equal(second.success, true);
+		assert.equal(calls, 1);
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
+		else process.env.OLLAMA_API_KEY = originalEnv;
+	}
+});
+
+test("fetchProviderQuotas: raw local ollama with a non-cloud model never reaches the network", async () => {
+	let calls = 0;
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () => {
+		calls++;
+		throw new Error("must not fetch for a non-cloud model");
+	};
+	try {
+		const auth = {
+			modelId: "llama3:8b",
+			getApiKey: async () => undefined,
+			getCredential: () => undefined,
+		};
+		const result = await fetchProviderQuotas(auth, "ollama", makeCache());
+		assert.equal(result.success, false);
+		assert.equal(result.error.kind, "config");
+		assert.equal(calls, 0);
+	} finally {
+		globalThis.fetch = originalFetch;
 	}
 });

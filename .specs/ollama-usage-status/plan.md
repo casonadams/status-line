@@ -11,7 +11,9 @@ changing it.
   `GET https://ollama.com/api/usage`, `Authorization: Bearer <key>`. Response
   is accepted iff `limits.session.usage` and `limits.weekly.usage` are finite
   0-1 cap fractions; `models[]`/`activity` are ignored. No reset timestamps
-  exist, so windows render without countdowns.
+  exist, so windows render without countdowns. **Verified live 2026-08-29**
+  (probe returned `usage: 0.313 / 0.445` fractions; no reset fields anywhere
+  incl. `/v1` headers and sibling endpoints).
 - **pi's key resolution**: `modelRegistry.getApiKeyForProvider("ollama-cloud")`
   covers auth.json credentials and `$OLLAMA_API_KEY` apiKey expansion;
   pi-ollama-cloud's own resolution adds `?? process.env.OLLAMA_API_KEY`,
@@ -22,7 +24,9 @@ changing it.
   backoff) -> windows formatted by `usage/format.ts` (preferred labels already
   `["5h","7d"]`; `limitValue === 100` renders remaining-percent only). Zero
   changes to `index.ts` are needed: `"ollama-cloud"` flows through the same
-  `refreshForContext` path as the four existing providers.
+  `refreshForContext` path as the four existing providers. Small `index.ts`
+  revisions were later accepted in Slice 4: the eligibility call passes
+  `ctx.model?.id` (the `:cloud` gate) - see Slice 4.
 - **Test conventions**: `node --test "extensions/**/*.test.mjs"` (Node >= 23.6,
   native TS import), `globalThis.fetch` swapped inside try/finally,
   `makeAuth`/`makeCache` helpers already exist in `fetch.test.mjs`, and
@@ -332,6 +336,66 @@ twice on two surfaces).
 **Tests:** None (docs only).
 **Verify:** `pnpm lint` -- biome passes including markdown; `pnpm test` --
 full suite green.
+
+---
+
+## Slice 4: Local `ollama` provider gate + auth.json credential chain
+
+**Goal:** Ollama Cloud usage renders for the local `ollama` provider when the
+active model is a `:cloud` proxy, with the key resolved from the registry,
+auth.json, or `OLLAMA_API_KEY`; non-cloud local models stay silent.
+
+**Acceptance criteria:** AC-008 and the revised AC-006/AC-009 from the spec
+revision.
+
+### Task 4.1: Revise spec and plan [1]
+**Do:** Spec non-goal flip (local `ollama` in scope, `:cloud`-gated), REQ-001/
+REQ-003/AC-006/AC-008/AC-009 revisions, open question resolved with probe
+evidence. Plan gains this slice.
+**Verify:** review of both artifacts.
+
+### Task 4.2: Gate + credential chain [2]
+**Do:**
+- `usage/fetch.ts`: `normalizeProvider(provider, modelId?)` - `"ollama"`
+  (case-insensitive) returns `"ollama-cloud"` iff `modelId` ends `:cloud`,
+  else `undefined`; other names go through `PROVIDER_ALIASES` ungated (no new
+  alias entry - the gate is a conditional, not a table row).
+  `fetchProviderQuotas` calls `normalizeProvider(rawProvider, auth.modelId)`.
+- `extensions/status-line/index.ts`: `refreshStatus` calls
+  `normalizeProvider(rawProvider, ctx.model?.id)` (the naturalization point;
+  without it the gate is dead code - index clears the status before fetch).
+- `usage/providers/ollama_cloud.ts`: key chain extends to
+  `getApiKey -> credentialApiKey(getCredential("ollama-cloud")) -> env`,
+  where `credentialApiKey` accepts `{type: "api_key", key: string}`.
+**Context:** pi's `getApiKeyForProvider` never throws (verified; returns
+`undefined` for unregistered providers), so no try/catch wrapper is added.
+`readStoredCredential` returns the raw auth.json entry or `undefined`.
+**Tests:** see Task 4.3.
+**Verify:** `pnpm typecheck`.
+
+### Task 4.3: Tests [2]
+**Do:** Append (additive):
+- `fetch.test.mjs`: normalization matrix (ollama+:cloud -> ollama-cloud;
+  ollama+local -> undefined; ollama w/o id -> undefined; ollama-cloud
+  ungated); auth.json-credential fetch (Bearer from credential, registry
+  miss, env unset); `fetchProviderQuotas` by raw `"ollama"` with `:cloud`
+  modelId (success via shared "ollama-cloud" cache plane, single fetch across
+  two calls).
+- `index.test.mjs`: local `ollama` + `context.model.id =
+  "glm-5.3-flash:cloud"` + key renders `"66% 55%"`; same with no key ->
+  warning `"quota fetch failed (ollama-cloud)"`; env stubs save/clear/restore.
+**Context:** existing AC-006 test (no model id) stays untouched and green.
+**Verify:** scoped `node --test` on both files.
+
+### Task 4.4: README + final gates + commit [1]
+**Do:** README provider bullet gains local `ollama` support and the auth.json
+`"ollama-cloud"` setup; pointer that the local server does not proxy usage.
+Run the trio, additive-diff check, commit
+`feat(status-line): show Ollama Cloud usage for local ollama cloud models`.
+
+**Slice 4 verification:** `pnpm lint && pnpm typecheck && pnpm test` green;
+`git diff` shows index.ts carrying exactly the one `normalizeProvider`
+call-site change.
 
 ---
 
