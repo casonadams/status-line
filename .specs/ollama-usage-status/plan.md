@@ -365,8 +365,7 @@ evidence. Plan gains this slice.
   `normalizeProvider(rawProvider, ctx.model?.id)` (the naturalization point;
   without it the gate is dead code - index clears the status before fetch).
 - `usage/providers/ollama_cloud.ts`: key chain extends to
-  `static_key/static-key pin -> getApiKey("ollama-cloud"|"ollama") ->
-  credentialField(..., "key") for both ids -> env`.
+  `getApiKey("ollama-cloud") -> credentialApiKey(getCredential("ollama-cloud")) -> env`.
 **Context:** pi's `getApiKeyForProvider` never throws (verified; returns
 `undefined` for unregistered providers), so no try/catch wrapper is added.
 `readStoredCredential` returns the raw auth.json entry or `undefined`.
