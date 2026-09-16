@@ -295,6 +295,59 @@ test("google-antigravity: decodes provider API key and fetches usage endpoints",
 			ok: true,
 			status: 200,
 			json: async () => ({
+				groups: [
+					{
+						displayName: "Claude and GPT models",
+						buckets: [
+							{ bucketId: "3p-5h", window: "5h", remainingFraction: 0.8 },
+							{ bucketId: "3p-weekly", window: "weekly", remainingFraction: 0.5 },
+						],
+					},
+				],
+			}),
+			text: async () => "",
+		});
+	};
+	try {
+		const auth = {
+			modelId: "claude-sonnet-4-6",
+			getApiKey: async (provider) =>
+				provider === "antigravity" ? JSON.stringify({ token: "access-token", projectId: "proj-123" }) : undefined,
+			getCredential: () => undefined,
+		};
+		const result = await fetchGoogleAntigravityQuotas(auth);
+		assert.equal(result.success, true);
+		assert.equal(result.data.windows.length, 2);
+		assert.equal(result.data.windows[0].label, "5h");
+		assert.equal(result.data.windows[0].usedPercent, 20);
+		assert.equal(result.data.windows[1].label, "7d");
+		assert.equal(result.data.windows[1].usedPercent, 50);
+		assert.equal(requests.length, 1);
+		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
+		assert.equal(requests[0].init.headers.Authorization, "Bearer access-token");
+		assert.deepEqual(JSON.parse(requests[0].init.body), { project: "proj-123" });
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("google-antigravity: falls back to fetchAvailableModels when retrieveUserQuotaSummary fails", async () => {
+	const originalFetch = globalThis.fetch;
+	const requests = [];
+	globalThis.fetch = async (url, init) => {
+		requests.push({ url, init });
+		if (url.endsWith("/v1internal:retrieveUserQuotaSummary")) {
+			return /** @type {Response} */ ({
+				ok: false,
+				status: 404,
+				json: async () => ({ error: { message: "Not found" } }),
+				text: async () => "Not found",
+			});
+		}
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({
 				models: { "claude-sonnet-4-6": { quotaInfo: { remainingFraction: 0.2 } } },
 			}),
 			text: async () => "",
@@ -310,10 +363,10 @@ test("google-antigravity: decodes provider API key and fetches usage endpoints",
 		const result = await fetchGoogleAntigravityQuotas(auth);
 		assert.equal(result.success, true);
 		assert.equal(result.data.windows[0].usedPercent, 80);
-		assert.equal(requests.length, 1);
-		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
-		assert.equal(requests[0].init.headers.Authorization, "Bearer access-token");
-		assert.deepEqual(JSON.parse(requests[0].init.body), { project: "proj-123" });
+		assert.equal(requests.length, 2);
+		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
+		assert.equal(requests[1].url, "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+		assert.deepEqual(JSON.parse(requests[1].init.body), { project: "proj-123" });
 	} finally {
 		globalThis.fetch = originalFetch;
 	}

@@ -164,6 +164,117 @@ test("parseGoogleAntigravityUsage: uses the lowest remaining quota when the mode
 	assert.equal(windows[0].usedPercent, 80);
 });
 
+test("parseGoogleAntigravityUsage: parses 5h and 7d windows from summary groups", () => {
+	const windows = parseGoogleAntigravityUsage(
+		{
+			groups: [
+				{
+					displayName: "Gemini Models",
+					buckets: [
+						{ bucketId: "gemini-5h", window: "5h", remainingFraction: 0.85, resetTime: "2026-01-01T05:00:00Z" },
+						{ bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.5, resetTime: "2026-01-07T00:00:00Z" },
+					],
+				},
+				{
+					displayName: "Claude and GPT models",
+					buckets: [
+						{ bucketId: "3p-5h", window: "5h", remainingFraction: 1.0, resetTime: "2026-01-01T05:00:00Z" },
+						{ bucketId: "3p-weekly", window: "weekly", remainingFraction: 0.75, resetTime: "2026-01-07T00:00:00Z" },
+					],
+				},
+			],
+		},
+		"gemini-2.5-pro",
+	);
+	assert.equal(windows.length, 2);
+	assert.equal(windows[0].label, "5h");
+	assert.equal(windows[0].usedPercent, 15);
+	assert.equal(windows[0].usedValue, 15);
+	assert.equal(windows[0].limitValue, 100);
+	assert.equal(windows[0].limited, false);
+	assert.equal(windows[1].label, "7d");
+	assert.equal(windows[1].usedPercent, 50);
+	assert.equal(windows[1].usedValue, 50);
+	assert.equal(windows[1].limitValue, 100);
+	assert.equal(windows[1].limited, false);
+});
+
+test("parseGoogleAntigravityUsage: selects Claude and GPT group for Claude models", () => {
+	const windows = parseGoogleAntigravityUsage(
+		{
+			groups: [
+				{
+					displayName: "Gemini Models",
+					buckets: [
+						{ bucketId: "gemini-5h", window: "5h", remainingFraction: 0.2 },
+						{ bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.1 },
+					],
+				},
+				{
+					displayName: "Claude and GPT models",
+					buckets: [
+						{ bucketId: "3p-5h", window: "5h", remainingFraction: 0.9 },
+						{ bucketId: "3p-weekly", window: "weekly", remainingFraction: 0.7 },
+					],
+				},
+			],
+		},
+		"claude-sonnet-4-6",
+	);
+	assert.equal(windows.length, 2);
+	assert.equal(windows[0].label, "5h");
+	assert.equal(windows[0].usedPercent, 10);
+	assert.equal(windows[1].label, "7d");
+	assert.equal(windows[1].usedPercent, 30);
+});
+
+test("parseGoogleAntigravityUsage: selects group with lowest remaining when model unknown", () => {
+	const windows = parseGoogleAntigravityUsage({
+		groups: [
+			{
+				displayName: "Claude and GPT models",
+				buckets: [
+					{ bucketId: "3p-5h", window: "5h", remainingFraction: 0.9 },
+					{ bucketId: "3p-weekly", window: "weekly", remainingFraction: 0.8 },
+				],
+			},
+			{
+				displayName: "Gemini Models",
+				buckets: [
+					{ bucketId: "gemini-5h", window: "5h", remainingFraction: 0.5 },
+					{ bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.2 },
+				],
+			},
+		],
+	});
+	assert.equal(windows.length, 2);
+	assert.equal(windows[0].label, "5h");
+	assert.equal(windows[0].usedPercent, 50);
+	assert.equal(windows[1].label, "7d");
+	assert.equal(windows[1].usedPercent, 80);
+});
+
+test("parseGoogleAntigravityUsage: marks exhausted bucket as limited", () => {
+	const windows = parseGoogleAntigravityUsage({
+		groups: [
+			{
+				displayName: "Gemini Models",
+				buckets: [
+					{ bucketId: "gemini-5h", window: "5h", remainingFraction: 0 },
+					{ bucketId: "gemini-weekly", window: "weekly", remainingFraction: 0.5 },
+				],
+			},
+		],
+	});
+	assert.equal(windows.length, 2);
+	assert.equal(windows[0].label, "5h");
+	assert.equal(windows[0].usedPercent, 100);
+	assert.equal(windows[0].limited, true);
+	assert.equal(windows[1].label, "7d");
+	assert.equal(windows[1].usedPercent, 50);
+	assert.equal(windows[1].limited, false);
+});
+
 test("parseOllamaUsage: session and weekly windows in preferred order", () => {
 	const windows = parseOllamaUsage({ limits: { session: { usage: 0.34 }, weekly: { usage: 0.45 } } });
 	assert.equal(windows.length, 2);
