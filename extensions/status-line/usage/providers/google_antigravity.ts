@@ -6,6 +6,17 @@ import type { AntigravityModelsResponse, AntigravityQuotaSummaryResponse } from 
 export * from "./google_antigravity_parse.ts";
 export * from "./google_antigravity_types.ts";
 
+const ENDPOINT_CANDIDATES: readonly string[] = [
+	"https://daily-cloudcode-pa.googleapis.com",
+	"https://daily-cloudcode-pa.sandbox.googleapis.com",
+	"https://cloudcode-pa.googleapis.com",
+];
+
+function endpointCandidates(): readonly string[] {
+	const custom = process.env.ANTIGRAVITY_BASE_URL?.trim();
+	return custom ? [custom] : ENDPOINT_CANDIDATES;
+}
+
 interface AntigravityAuth {
 	token: string;
 	projectId?: string;
@@ -50,6 +61,37 @@ async function resolveAntigravityAuth(auth: QuotaAuth): Promise<Partial<Antigrav
 	return resolved;
 }
 
+async function fetchSummaryWindows(headers: Record<string, string>, body: string, modelId?: string) {
+	let error: { message: string; kind: "timeout" | "cancelled" | "http" | "network" } | undefined;
+	for (const endpoint of endpointCandidates()) {
+		const res = await fetchJson<AntigravityQuotaSummaryResponse>(`${endpoint}/v1internal:retrieveUserQuotaSummary`, {
+			method: "POST",
+			headers,
+			body,
+		});
+		if (res.ok && (res.data?.groups?.length || res.data?.buckets?.length)) {
+			const windows = parseGoogleAntigravityUsage(res.data, modelId);
+			if (windows.length > 0) return { windows };
+		}
+		if (!res.ok) error = res;
+	}
+	return { error };
+}
+
+async function fetchModelsWindows(headers: Record<string, string>, body: string, modelId?: string) {
+	let error: { message: string; kind: "timeout" | "cancelled" | "http" | "network" } | undefined;
+	for (const endpoint of endpointCandidates()) {
+		const res = await fetchJson<AntigravityModelsResponse>(`${endpoint}/v1internal:fetchAvailableModels`, {
+			method: "POST",
+			headers,
+			body,
+		});
+		if (res.ok) return { windows: parseGoogleAntigravityUsage(res.data, modelId) };
+		error = res;
+	}
+	return { error };
+}
+
 export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<QuotasResult> {
 	const credentials = await resolveAntigravityAuth(auth);
 	if (!credentials.token) return failure("No Google Antigravity OAuth token found", "config");
@@ -63,40 +105,18 @@ export async function fetchGoogleAntigravityQuotas(auth: QuotaAuth): Promise<Quo
 		"User-Agent": "antigravity",
 	};
 
-	const summaryResult = await fetchJson<AntigravityQuotaSummaryResponse>(
-		"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-		{
-			method: "POST",
-			headers,
-			body,
-		},
-	);
-
-	if (summaryResult.ok && (summaryResult.data?.groups?.length || summaryResult.data?.buckets?.length)) {
-		const windows = parseGoogleAntigravityUsage(summaryResult.data, auth.modelId);
-		if (windows.length > 0) {
-			return success("google-antigravity", windows);
-		}
-	}
+	const summary = await fetchSummaryWindows(headers, body, auth.modelId);
+	if (summary.windows) return success("google-antigravity", summary.windows);
 
 	if (!credentials.projectId) {
-		if (!summaryResult.ok) return failure(summaryResult.message, summaryResult.kind);
+		if (summary.error) return failure(summary.error.message, summary.error.kind);
 		return failure("No Google Antigravity project id found", "config");
 	}
 
-	const modelsResult = await fetchJson<AntigravityModelsResponse>(
-		"https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-		{
-			method: "POST",
-			headers,
-			body,
-		},
-	);
+	const models = await fetchModelsWindows(headers, body, auth.modelId);
+	if (models.windows) return success("google-antigravity", models.windows);
 
-	if (!modelsResult.ok) {
-		const errorResult = !summaryResult.ok ? summaryResult : modelsResult;
-		return failure(errorResult.message, errorResult.kind);
-	}
-
-	return success("google-antigravity", parseGoogleAntigravityUsage(modelsResult.data, auth.modelId));
+	const error = summary.error ?? models.error;
+	if (error) return failure(error.message, error.kind);
+	return failure("Failed to fetch Google Antigravity quotas", "http");
 }

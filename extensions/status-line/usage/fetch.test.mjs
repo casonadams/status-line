@@ -323,7 +323,7 @@ test("google-antigravity: decodes provider API key and fetches usage endpoints",
 		assert.equal(result.data.windows[1].label, "7d");
 		assert.equal(result.data.windows[1].usedPercent, 50);
 		assert.equal(requests.length, 1);
-		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
+		assert.equal(requests[0].url, "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
 		assert.equal(requests[0].init.headers.Authorization, "Bearer access-token");
 		assert.deepEqual(JSON.parse(requests[0].init.body), { project: "proj-123" });
 	} finally {
@@ -363,10 +363,10 @@ test("google-antigravity: falls back to fetchAvailableModels when retrieveUserQu
 		const result = await fetchGoogleAntigravityQuotas(auth);
 		assert.equal(result.success, true);
 		assert.equal(result.data.windows[0].usedPercent, 80);
-		assert.equal(requests.length, 2);
-		assert.equal(requests[0].url, "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
-		assert.equal(requests[1].url, "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
-		assert.deepEqual(JSON.parse(requests[1].init.body), { project: "proj-123" });
+		assert.equal(requests.length, 4);
+		assert.equal(requests[0].url, "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
+		assert.equal(requests[3].url, "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+		assert.deepEqual(JSON.parse(requests[3].init.body), { project: "proj-123" });
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
