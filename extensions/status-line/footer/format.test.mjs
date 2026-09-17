@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { formatTokens } from "../formatters.ts";
 import { formatExtensionStatuses, formatStatsLine, formatTopLine } from "./format.ts";
 
 function footerData(statuses = new Map()) {
@@ -72,4 +73,20 @@ test("formatTopLine abbreviates only true descendants of the home directory", ()
 	} finally {
 		process.env.HOME = originalHome;
 	}
+});
+
+test("formatTokens formats token counts with appropriate units and precision", () => {
+	assert.equal(formatTokens(0), "0");
+	assert.equal(formatTokens(500), "500");
+	assert.equal(formatTokens(999), "999");
+	assert.equal(formatTokens(1000), "1k");
+	assert.equal(formatTokens(1200), "1.2k");
+	assert.equal(formatTokens(9800), "9.8k");
+	assert.equal(formatTokens(10000), "10k");
+	assert.equal(formatTokens(12500), "12.5k");
+	assert.equal(formatTokens(12000), "12k");
+	assert.equal(formatTokens(99900), "99.9k");
+	assert.equal(formatTokens(100000), "100k");
+	assert.equal(formatTokens(1500000), "1.5M");
+	assert.equal(formatTokens(2000000), "2M");
 });

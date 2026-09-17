@@ -26,12 +26,15 @@ function deferred() {
 	return { promise, resolve };
 }
 
-function makeContext(provider, statuses) {
+function makeContext(provider, statuses, entries = []) {
 	return {
 		hasUI: true,
 		model: provider ? { provider } : undefined,
 		modelRegistry: {
 			getApiKeyForProvider: async () => "token",
+		},
+		sessionManager: {
+			getEntries: () => entries,
 		},
 		ui: {
 			theme: { fg: (_color, text) => text },
@@ -269,5 +272,126 @@ test("local ollama cloud model without any key shows the warning status without 
 		globalThis.fetch = originalFetch;
 		if (originalEnv === undefined) delete process.env.OLLAMA_API_KEY;
 		else process.env.OLLAMA_API_KEY = originalEnv;
+	}
+});
+
+test("google model with API key renders tokens and cost without HTTP calls", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	let fetchCalls = 0;
+	globalThis.fetch = async () => {
+		fetchCalls++;
+		throw new Error("must not fetch HTTP for API key model");
+	};
+	const statuses = [];
+	const entries = [
+		{
+			type: "message",
+			message: {
+				role: "assistant",
+				usage: { input: 9800, output: 2700, cost: { total: 0.045 } },
+			},
+		},
+	];
+	try {
+		const context = makeContext("google", statuses, entries);
+		context.modelRegistry.isUsingOAuth = () => false;
+		handlers.get("session_start")({}, context);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "12.5k • $0.045");
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("google model with API key updates status on message_end", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () => {
+		throw new Error("must not fetch HTTP");
+	};
+	const statuses = [];
+	const entries = [];
+	try {
+		const context = makeContext("google", statuses, entries);
+		context.modelRegistry.isUsingOAuth = () => false;
+		handlers.get("session_start")({}, context);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "0 • $0.000");
+
+		entries.push({
+			type: "message",
+			message: {
+				role: "assistant",
+				usage: { input: 2000, output: 500, cost: { total: 0.008 } },
+			},
+		});
+
+		handlers.get("message_end")({ message: { role: "assistant", usage: { output: 500 } } }, context);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "2.5k • $0.008");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("any provider with isUsingOAuth false renders tokens and cost without HTTP calls", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	let fetchCalls = 0;
+	globalThis.fetch = async () => {
+		fetchCalls++;
+		throw new Error("must not fetch HTTP for API key model");
+	};
+	const statuses = [];
+	const entries = [
+		{
+			type: "message",
+			message: {
+				role: "assistant",
+				usage: { input: 1200, output: 800, cost: { total: 0.015 } },
+			},
+		},
+	];
+	try {
+		const context = makeContext("anthropic", statuses, entries);
+		context.modelRegistry.isUsingOAuth = () => false;
+		handlers.get("turn_end")({}, context);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "2k • $0.015");
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test("provider with isUsingOAuth true fetches OAuth quota", async () => {
+	const handlers = new Map();
+	installStatusLine(makeExtensionApi(handlers));
+	const originalFetch = globalThis.fetch;
+	let fetchCalls = 0;
+	globalThis.fetch = async () => {
+		fetchCalls++;
+		return /** @type {Response} */ ({
+			ok: true,
+			status: 200,
+			json: async () => ({ five_hour: { utilization: 30 } }),
+			text: async () => "",
+		});
+	};
+	const statuses = [];
+	try {
+		const context = makeContext("anthropic", statuses);
+		context.modelRegistry.isUsingOAuth = () => true;
+		handlers.get("turn_end")({}, context);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(statuses.at(-1), "70%");
+		assert.equal(fetchCalls, 1);
+	} finally {
+		globalThis.fetch = originalFetch;
 	}
 });

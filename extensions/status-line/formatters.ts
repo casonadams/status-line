@@ -14,9 +14,13 @@ export function fitRightAligned(left: string, right: string, width: number): str
 
 export function formatTokens(count: number): string {
 	if (count < 1_000) return `${count}`;
-	if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
+	if (count < 100_000) {
+		const formatted = (count / 1_000).toFixed(1);
+		return formatted.endsWith(".0") ? `${Math.round(count / 1_000)}k` : `${formatted}k`;
+	}
 	if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
-	return `${Math.round(count / 1_000_000)}M`;
+	const formattedM = (count / 1_000_000).toFixed(1);
+	return formattedM.endsWith(".0") ? `${Math.round(count / 1_000_000)}M` : `${formattedM}M`;
 }
 
 export function sanitizeStatusText(text: string): string {

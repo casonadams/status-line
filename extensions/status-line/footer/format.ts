@@ -5,7 +5,7 @@ import { fitRightAligned, formatTokens, sanitizeStatusText } from "../formatters
 
 const INLINE_STATUS_KEYS = new Set(["status-line", "optimizer"]);
 
-type SessionUsageTotals = {
+export type SessionUsageTotals = {
 	totalInput: number;
 	totalOutput: number;
 	totalCacheRead: number;
@@ -14,7 +14,7 @@ type SessionUsageTotals = {
 	usingSubscription: boolean;
 };
 
-type UsageEntry = {
+export type UsageEntry = {
 	input?: number;
 	output?: number;
 	cacheRead?: number;
@@ -40,14 +40,14 @@ function getOptimizerStatus(footerData: ReadonlyFooterDataProvider): string | un
 	return footerData.getExtensionStatuses().get("optimizer");
 }
 
-function getSessionUsageTotals(ctx: ExtensionContext): SessionUsageTotals {
+export function getSessionUsageTotals(ctx: ExtensionContext): SessionUsageTotals {
 	let totalInput = 0;
 	let totalOutput = 0;
 	let totalCacheRead = 0;
 	let totalCacheWrite = 0;
 	let totalCost = 0;
 
-	for (const entry of ctx.sessionManager.getEntries()) {
+	for (const entry of ctx.sessionManager?.getEntries?.() ?? []) {
 		if (entry.type !== "message" || entry.message.role !== "assistant") continue;
 		const usage = entry.message.usage as UsageEntry | undefined;
 		totalInput += typeof usage?.input === "number" ? usage.input : 0;
@@ -63,7 +63,7 @@ function getSessionUsageTotals(ctx: ExtensionContext): SessionUsageTotals {
 		totalCacheRead,
 		totalCacheWrite,
 		totalCost,
-		usingSubscription: !!ctx.model && ctx.modelRegistry.isUsingOAuth(ctx.model),
+		usingSubscription: Boolean(ctx.model && ctx.modelRegistry?.isUsingOAuth?.(ctx.model)),
 	};
 }
 

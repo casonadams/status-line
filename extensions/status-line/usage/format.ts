@@ -1,3 +1,4 @@
+import { formatTokens } from "../formatters.ts";
 import type { QuotaWindow } from "./types.ts";
 
 const PREFERRED_WINDOW_LABELS: readonly string[] = ["5h", "7d"];
@@ -71,4 +72,15 @@ export function formatStatusLineQuotaStatus(windows: readonly QuotaWindow[]): st
 		if (countdown) parts.push(countdown);
 	}
 	return parts.join(" ");
+}
+
+export function formatApiKeyUsageStatus(totals: {
+	totalInput: number;
+	totalOutput: number;
+	totalCacheRead: number;
+	totalCacheWrite: number;
+	totalCost: number;
+}): string {
+	const totalTokens = totals.totalInput + totals.totalOutput + totals.totalCacheRead + totals.totalCacheWrite;
+	return `${formatTokens(totalTokens)} • $${totals.totalCost.toFixed(3)}`;
 }

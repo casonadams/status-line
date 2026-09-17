@@ -1,7 +1,8 @@
 import { type ExtensionAPI, type ExtensionContext, readStoredCredential } from "@earendil-works/pi-coding-agent";
+import { getSessionUsageTotals } from "./footer/format.ts";
 import { installStatusLineFooter } from "./footer.ts";
 import { createQuotaCache, fetchProviderQuotas, normalizeProvider } from "./usage/fetch.ts";
-import { formatStatusLineQuotaStatus } from "./usage/format.ts";
+import { formatApiKeyUsageStatus, formatStatusLineQuotaStatus } from "./usage/format.ts";
 import type { QuotaAuth } from "./usage/helpers.ts";
 import { SpeedTracker } from "./usage/speed.ts";
 
@@ -30,9 +31,10 @@ class StatusLineExtension {
 		this.pi.on("message_start", (event) => {
 			if (event.message.role === "assistant") this.speed.responseStart();
 		});
-		this.pi.on("message_end", (event) => {
+		this.pi.on("message_end", (event, ctx) => {
 			if (event.message.role !== "assistant") return;
 			this.speed.responseEnd(event.message.usage?.output);
+			if (ctx) void this.refreshForContext(ctx);
 		});
 	}
 
@@ -69,12 +71,41 @@ class StatusLineExtension {
 		this.setStatus(ctx, ctx.model ? `quota fetch failed (${provider})` : "no model", "warning");
 	}
 
+	private isApiKeyModel(ctx: ExtensionContext, rawProvider: string | undefined): boolean {
+		if (!ctx.model) return false;
+		const provider = (rawProvider ?? ctx.model.provider)?.toLowerCase();
+
+		if (provider === "ollama" && !ctx.model.id?.endsWith(":cloud")) return false;
+		if (provider === "llama-cpp" || provider === "mlx") return false;
+
+		if (provider === "ollama-cloud" || (provider === "ollama" && ctx.model.id?.endsWith(":cloud"))) {
+			return false;
+		}
+
+		if (typeof ctx.modelRegistry?.isUsingOAuth === "function") {
+			return !ctx.modelRegistry.isUsingOAuth(ctx.model);
+		}
+
+		return provider === "google";
+	}
+
 	private async refreshStatus(
 		ctx: ExtensionContext,
 		rawProvider: string | undefined,
 		generation: number,
 	): Promise<void> {
 		if (!ctx.hasUI) return;
+		if (!ctx.model) {
+			this.setStatus(ctx, undefined);
+			return;
+		}
+
+		if (this.isApiKeyModel(ctx, rawProvider)) {
+			const totals = getSessionUsageTotals(ctx);
+			this.setStatus(ctx, formatApiKeyUsageStatus(totals));
+			return;
+		}
+
 		const provider = normalizeProvider(rawProvider, ctx.model?.id);
 		if (!provider) {
 			this.setStatus(ctx, undefined);

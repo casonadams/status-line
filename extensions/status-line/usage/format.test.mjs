@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatQuotaCountdown, formatStatusLineQuotaStatus } from "./format.ts";
+import { formatApiKeyUsageStatus, formatQuotaCountdown, formatStatusLineQuotaStatus } from "./format.ts";
 
 const base = (overrides) => ({
 	label: "5h",
@@ -100,4 +100,37 @@ test("formatQuotaCountdown: minutes-only form", () => {
 test("formatQuotaCountdown: returns undefined for missing reset", () => {
 	const window = base({ resetsAt: new Date(0) });
 	assert.equal(formatQuotaCountdown(window), undefined);
+});
+
+test("formatApiKeyUsageStatus: zero tokens and zero cost", () => {
+	const status = formatApiKeyUsageStatus({
+		totalInput: 0,
+		totalOutput: 0,
+		totalCacheRead: 0,
+		totalCacheWrite: 0,
+		totalCost: 0,
+	});
+	assert.equal(status, "0 • $0.000");
+});
+
+test("formatApiKeyUsageStatus: formats combined tokens and cost concisely", () => {
+	const status = formatApiKeyUsageStatus({
+		totalInput: 9800,
+		totalOutput: 2700,
+		totalCacheRead: 0,
+		totalCacheWrite: 0,
+		totalCost: 0.045,
+	});
+	assert.equal(status, "12.5k • $0.045");
+});
+
+test("formatApiKeyUsageStatus: includes cache read and cache write tokens", () => {
+	const status = formatApiKeyUsageStatus({
+		totalInput: 1000,
+		totalOutput: 500,
+		totalCacheRead: 200,
+		totalCacheWrite: 100,
+		totalCost: 0.0125,
+	});
+	assert.equal(status, "1.8k • $0.013");
 });
