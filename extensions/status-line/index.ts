@@ -1,9 +1,9 @@
 import { type ExtensionAPI, type ExtensionContext, readStoredCredential } from "@earendil-works/pi-coding-agent";
-import { getSessionUsageTotals } from "./footer/format.ts";
 import { installStatusLineFooter } from "./footer.ts";
+import { getRootSessionsDir, SessionUsageAggregator } from "./usage/aggregate.ts";
 import { createQuotaCache, fetchProviderQuotas, normalizeProvider } from "./usage/fetch.ts";
 import { formatApiKeyUsageStatus, formatStatusLineQuotaStatus } from "./usage/format.ts";
-import type { QuotaAuth } from "./usage/helpers.ts";
+import { isApiKeyModel, type QuotaAuth } from "./usage/helpers.ts";
 import { SpeedTracker } from "./usage/speed.ts";
 
 const EXTENSION_ID = "status-line";
@@ -13,6 +13,7 @@ class StatusLineExtension {
 	private showExtensionStatuses = false;
 	private readonly speed = new SpeedTracker();
 	private readonly cache = createQuotaCache();
+	private readonly aggregator = new SessionUsageAggregator();
 	private readonly pi: ExtensionAPI;
 
 	constructor(pi: ExtensionAPI) {
@@ -71,24 +72,6 @@ class StatusLineExtension {
 		this.setStatus(ctx, ctx.model ? `quota fetch failed (${provider})` : "no model", "warning");
 	}
 
-	private isApiKeyModel(ctx: ExtensionContext, rawProvider: string | undefined): boolean {
-		if (!ctx.model) return false;
-		const provider = (rawProvider ?? ctx.model.provider)?.toLowerCase();
-
-		if (provider === "ollama" && !ctx.model.id?.endsWith(":cloud")) return false;
-		if (provider === "llama-cpp" || provider === "mlx") return false;
-
-		if (provider === "ollama-cloud" || (provider === "ollama" && ctx.model.id?.endsWith(":cloud"))) {
-			return false;
-		}
-
-		if (typeof ctx.modelRegistry?.isUsingOAuth === "function") {
-			return !ctx.modelRegistry.isUsingOAuth(ctx.model);
-		}
-
-		return provider === "google";
-	}
-
 	private async refreshStatus(
 		ctx: ExtensionContext,
 		rawProvider: string | undefined,
@@ -100,8 +83,23 @@ class StatusLineExtension {
 			return;
 		}
 
-		if (this.isApiKeyModel(ctx, rawProvider)) {
-			const totals = getSessionUsageTotals(ctx);
+		const isUsingOAuth = ctx.modelRegistry?.isUsingOAuth
+			? (m: { id?: string; provider?: string }) =>
+					ctx.modelRegistry.isUsingOAuth(m as Parameters<typeof ctx.modelRegistry.isUsingOAuth>[0])
+			: undefined;
+
+		if (isApiKeyModel(ctx.model, rawProvider, isUsingOAuth)) {
+			const provider = (rawProvider ?? ctx.model.provider)?.toLowerCase() ?? "";
+			const sessionsDir = getRootSessionsDir(ctx.sessionManager?.getSessionDir?.());
+			const currentSessionFile = ctx.sessionManager?.getSessionFile?.();
+			const currentEntries = ctx.sessionManager?.getEntries?.() ?? [];
+			const totals = this.aggregator.getProviderUsage({
+				provider,
+				sessionsDir,
+				currentSessionFile,
+				currentEntries,
+				activeModelProvider: ctx.model.provider,
+			});
 			this.setStatus(ctx, formatApiKeyUsageStatus(totals));
 			return;
 		}

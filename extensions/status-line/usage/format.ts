@@ -74,13 +74,36 @@ export function formatStatusLineQuotaStatus(windows: readonly QuotaWindow[]): st
 	return parts.join(" ");
 }
 
-export function formatApiKeyUsageStatus(totals: {
-	totalInput: number;
-	totalOutput: number;
-	totalCacheRead: number;
-	totalCacheWrite: number;
-	totalCost: number;
-}): string {
+export type ApiKeyUsageInput =
+	| {
+			day: { tokens: number; cost: number };
+			month: { tokens: number; cost: number };
+	  }
+	| {
+			totalInput: number;
+			totalOutput: number;
+			totalCacheRead: number;
+			totalCacheWrite: number;
+			totalCost: number;
+	  }
+	| {
+			tokens: number;
+			cost: number;
+	  };
+
+export function formatApiKeyUsageStatus(totals: ApiKeyUsageInput): string {
+	if ("day" in totals && "month" in totals) {
+		const dayTokens = formatTokens(totals.day.tokens);
+		const dayCost = `$${totals.day.cost.toFixed(3)}`;
+		const monthTokens = formatTokens(totals.month.tokens);
+		const monthCost = `$${totals.month.cost.toFixed(3)}`;
+		return `${dayTokens} • ${dayCost} * ${monthTokens} • ${monthCost}`;
+	}
+
+	if ("tokens" in totals && "cost" in totals) {
+		return `${formatTokens(totals.tokens)} • $${totals.cost.toFixed(3)}`;
+	}
+
 	const totalTokens = totals.totalInput + totals.totalOutput + totals.totalCacheRead + totals.totalCacheWrite;
 	return `${formatTokens(totalTokens)} • $${totals.totalCost.toFixed(3)}`;
 }

@@ -75,3 +75,30 @@ export function failure(message: string, kind: "cancelled" | "timeout" | "config
 export function success(provider: SupportedQuotaProvider, windows: QuotaWindow[]): QuotasResult {
 	return { success: true, data: { provider, windows } };
 }
+
+export type ActiveModelInfo = {
+	id?: string;
+	provider?: string;
+};
+
+export function isApiKeyModel(
+	model: ActiveModelInfo | undefined,
+	rawProvider: string | undefined,
+	isUsingOAuth?: (model: ActiveModelInfo) => boolean,
+): boolean {
+	if (!model) return false;
+	const provider = (rawProvider ?? model.provider)?.toLowerCase();
+
+	if (provider === "ollama" && !model.id?.endsWith(":cloud")) return false;
+	if (provider === "llama-cpp" || provider === "mlx") return false;
+	if (provider === "ollama-cloud" || (provider === "ollama" && model.id?.endsWith(":cloud"))) {
+		return false;
+	}
+
+	if (typeof isUsingOAuth === "function") {
+		const usingOAuth = isUsingOAuth(model);
+		if (typeof usingOAuth === "boolean") return !usingOAuth;
+	}
+
+	return provider === "google";
+}

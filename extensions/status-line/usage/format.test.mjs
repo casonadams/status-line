@@ -134,3 +134,11 @@ test("formatApiKeyUsageStatus: includes cache read and cache write tokens", () =
 	});
 	assert.equal(status, "1.8k • $0.013");
 });
+
+test("formatApiKeyUsageStatus: formats day and month totals concisely without labels", () => {
+	const status = formatApiKeyUsageStatus({
+		day: { tokens: 12500, cost: 0.045 },
+		month: { tokens: 125000, cost: 0.45 },
+	});
+	assert.equal(status, "12.5k • $0.045 * 125k • $0.450");
+});
