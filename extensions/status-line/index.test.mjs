@@ -275,7 +275,7 @@ test("local ollama cloud model without any key shows the warning status without 
 	}
 });
 
-test("google model with API key renders tokens and cost without HTTP calls", async () => {
+test("google model with API key renders daily and monthly cost without HTTP calls", async () => {
 	const handlers = new Map();
 	installStatusLine(makeExtensionApi(handlers));
 	const originalFetch = globalThis.fetch;
@@ -299,7 +299,7 @@ test("google model with API key renders tokens and cost without HTTP calls", asy
 		context.modelRegistry.isUsingOAuth = () => false;
 		handlers.get("session_start")({}, context);
 		await new Promise((resolve) => setImmediate(resolve));
-		assert.equal(statuses.at(-1), "12.5k • $0.045 * 12.5k • $0.045");
+		assert.equal(statuses.at(-1), "$0.045 • $0.045");
 		assert.equal(fetchCalls, 0);
 	} finally {
 		globalThis.fetch = originalFetch;
@@ -320,7 +320,7 @@ test("google model with API key updates status on message_end", async () => {
 		context.modelRegistry.isUsingOAuth = () => false;
 		handlers.get("session_start")({}, context);
 		await new Promise((resolve) => setImmediate(resolve));
-		assert.equal(statuses.at(-1), "0 • $0.000 * 0 • $0.000");
+		assert.equal(statuses.at(-1), "$0.000 • $0.000");
 
 		entries.push({
 			type: "message",
@@ -332,13 +332,13 @@ test("google model with API key updates status on message_end", async () => {
 
 		handlers.get("message_end")({ message: { role: "assistant", usage: { output: 500 } } }, context);
 		await new Promise((resolve) => setImmediate(resolve));
-		assert.equal(statuses.at(-1), "2.5k • $0.008 * 2.5k • $0.008");
+		assert.equal(statuses.at(-1), "$0.008 • $0.008");
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
 });
 
-test("any provider with isUsingOAuth false renders tokens and cost without HTTP calls", async () => {
+test("any provider with isUsingOAuth false renders daily and monthly cost without HTTP calls", async () => {
 	const handlers = new Map();
 	installStatusLine(makeExtensionApi(handlers));
 	const originalFetch = globalThis.fetch;
@@ -362,7 +362,7 @@ test("any provider with isUsingOAuth false renders tokens and cost without HTTP 
 		context.modelRegistry.isUsingOAuth = () => false;
 		handlers.get("turn_end")({}, context);
 		await new Promise((resolve) => setImmediate(resolve));
-		assert.equal(statuses.at(-1), "2k • $0.015 * 2k • $0.015");
+		assert.equal(statuses.at(-1), "$0.015 • $0.015");
 		assert.equal(fetchCalls, 0);
 	} finally {
 		globalThis.fetch = originalFetch;

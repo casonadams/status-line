@@ -76,8 +76,8 @@ export function formatStatusLineQuotaStatus(windows: readonly QuotaWindow[]): st
 
 export type ApiKeyUsageInput =
 	| {
-			day: { tokens: number; cost: number };
-			month: { tokens: number; cost: number };
+			day: { cost: number; tokens?: number };
+			month: { cost: number; tokens?: number };
 	  }
 	| {
 			totalInput: number;
@@ -93,11 +93,9 @@ export type ApiKeyUsageInput =
 
 export function formatApiKeyUsageStatus(totals: ApiKeyUsageInput): string {
 	if ("day" in totals && "month" in totals) {
-		const dayTokens = formatTokens(totals.day.tokens);
 		const dayCost = `$${totals.day.cost.toFixed(3)}`;
-		const monthTokens = formatTokens(totals.month.tokens);
 		const monthCost = `$${totals.month.cost.toFixed(3)}`;
-		return `${dayTokens} • ${dayCost} * ${monthTokens} • ${monthCost}`;
+		return `${dayCost} • ${monthCost}`;
 	}
 
 	if ("tokens" in totals && "cost" in totals) {
